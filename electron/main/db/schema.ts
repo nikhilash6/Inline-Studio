@@ -5,7 +5,7 @@
  */
 import type BetterSqlite3 from 'better-sqlite3'
 
-export const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS project (
@@ -44,6 +44,13 @@ CREATE TABLE IF NOT EXISTS takes (
   params          TEXT NOT NULL,
   comfy_prompt_id TEXT,
   created_at      INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS shot_inputs (
+  id          TEXT PRIMARY KEY,
+  shot_id     TEXT NOT NULL,
+  asset_id    TEXT NOT NULL,
+  position    INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS asset_folders (
@@ -111,6 +118,7 @@ CREATE TABLE IF NOT EXISTS workflow_templates (
 
 CREATE INDEX IF NOT EXISTS idx_shots_sequence ON shots(sequence_id);
 CREATE INDEX IF NOT EXISTS idx_takes_shot ON takes(shot_id);
+CREATE INDEX IF NOT EXISTS idx_shot_inputs_shot ON shot_inputs(shot_id);
 CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_assets_folder ON assets(folder_id);
 CREATE INDEX IF NOT EXISTS idx_asset_folders_parent ON asset_folders(parent_id);
@@ -123,11 +131,28 @@ CREATE INDEX IF NOT EXISTS idx_clips_sequence ON timeline_clips(sequence_id);
 export function applySchema(db: BetterSqlite3.Database): void {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
+  const fromVersion = db.pragma('user_version', { simple: true }) as number
   // Additive column migrations must run before SCHEMA_SQL, since SCHEMA_SQL builds
   // indexes that reference newly-added columns.
   migrateColumns(db)
   db.exec(SCHEMA_SQL)
+  runDataMigrations(db, fromVersion)
   stampVersion(db)
+}
+
+/** Data migrations that need the current schema (tables) to already exist. */
+function runDataMigrations(db: BetterSqlite3.Database, fromVersion: number): void {
+  // v5 → v6: move each shot's single input_asset_id into the new shot_inputs table.
+  // Idempotent: skip shots that already have inputs.
+  if (fromVersion < 6) {
+    db.exec(`
+      INSERT INTO shot_inputs (id, shot_id, asset_id, position)
+      SELECT lower(hex(randomblob(16))), id, input_asset_id, 0
+      FROM shots
+      WHERE input_asset_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM shot_inputs si WHERE si.shot_id = shots.id);
+    `)
+  }
 }
 
 /**

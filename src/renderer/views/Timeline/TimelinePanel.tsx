@@ -3,28 +3,27 @@ import { mediaUrl } from '@shared/media'
 import type { Shot } from '@shared/types'
 import { useShotStore } from '../../store/shotStore'
 import { useAssetStore } from '../../store/assetStore'
-import { useUiStore } from '../../store/uiStore'
-import { ASSET_DND_TYPE } from '../../lib/dnd'
+import { ASSET_DND_TYPE, getAssetDragIds } from '../../lib/dnd'
+
+const STACK_MAX = 4
+
+interface Thumb {
+  key: string
+  url: string
+  kind: 'image' | 'video' | 'audio'
+  hero?: boolean
+}
 
 /**
- * The shot-sequencer timeline: ordered shot columns, each with an Input row (the
- * imported asset) and an Output row (the chosen ComfyUI result — Slice B). Import
- * adds shots; drag a card to reorder; click to preview; double-click the name to rename.
+ * The shot-sequencer timeline. Each shot is a compact card with an input stack and
+ * an output (takes) stack, both capped with a "+N" overflow. Drag library assets
+ * onto a card to add inputs, or onto the background to create shots. Full management
+ * (add/remove/reorder inputs, pick hero, delete takes, link/pull) lives in the Inspector.
  */
 export function TimelinePanel(): React.JSX.Element {
-  const {
-    shots,
-    selectedId,
-    error,
-    notice,
-    load,
-    importAsShots,
-    addFromAsset,
-    reorder,
-    select,
-    exportShots,
-  } = useShotStore()
-  const selectAsset = useAssetStore((s) => s.select)
+  const { shots, selectedId, error, notice, load, importAsShots, reorder, select, exportShots } =
+    useShotStore()
+  const addFromAssets = useShotStore((s) => s.addFromAssets)
   const dragId = useRef<string | null>(null)
   const [dropActive, setDropActive] = useState(false)
 
@@ -32,31 +31,7 @@ export function TimelinePanel(): React.JSX.Element {
     void load()
   }, [load])
 
-  /** Allow dropping a Library asset (sets the copy cursor + highlight). */
-  const onAssetDragOver = (e: React.DragEvent): void => {
-    if (e.dataTransfer.types.includes(ASSET_DND_TYPE)) {
-      e.preventDefault()
-      e.dataTransfer.dropEffect = 'copy'
-      setDropActive(true)
-    }
-  }
-
-  /** Drop a Library asset anywhere on the strip → create a shot from it. */
-  const onAssetDrop = (e: React.DragEvent): void => {
-    const assetId = e.dataTransfer.getData(ASSET_DND_TYPE)
-    setDropActive(false)
-    if (assetId) {
-      e.preventDefault()
-      void addFromAsset(assetId)
-    }
-  }
-
-  const onSelect = (shot: Shot): void => {
-    select(shot.id)
-    if (shot.inputAssetId) selectAsset(shot.inputAssetId)
-  }
-
-  const onDrop = (targetId: string): void => {
+  const onReorderDrop = (targetId: string): void => {
     const from = dragId.current
     dragId.current = null
     if (!from || from === targetId) return
@@ -64,6 +39,23 @@ export function TimelinePanel(): React.JSX.Element {
     const at = ids.indexOf(targetId)
     ids.splice(at, 0, from)
     void reorder(ids)
+  }
+
+  const onBackgroundDragOver = (e: React.DragEvent): void => {
+    if (e.dataTransfer.types.includes(ASSET_DND_TYPE)) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+      setDropActive(true)
+    }
+  }
+
+  const onBackgroundDrop = (e: React.DragEvent): void => {
+    setDropActive(false)
+    const ids = getAssetDragIds(e.dataTransfer)
+    if (ids.length > 0) {
+      e.preventDefault()
+      void addFromAssets(ids) // one shot per dropped asset
+    }
   }
 
   return (
@@ -94,9 +86,9 @@ export function TimelinePanel(): React.JSX.Element {
       {notice && <p className="px-3 py-1 text-xs text-green-400">{notice}</p>}
 
       <div
-        onDragOver={onAssetDragOver}
+        onDragOver={onBackgroundDragOver}
         onDragLeave={() => setDropActive(false)}
-        onDrop={onAssetDrop}
+        onDrop={onBackgroundDrop}
         className={`min-h-0 flex-1 ${dropActive ? 'rounded ring-2 ring-inset ring-accent' : ''}`}
       >
         {shots.length === 0 ? (
@@ -107,15 +99,15 @@ export function TimelinePanel(): React.JSX.Element {
             </p>
           </div>
         ) : (
-          <div className="flex h-full w-full gap-3 overflow-x-auto p-3">
+          <div className="flex h-full w-full gap-2 overflow-x-auto p-3">
             {shots.map((shot) => (
               <ShotCard
                 key={shot.id}
                 shot={shot}
                 selected={shot.id === selectedId}
-                onSelect={() => onSelect(shot)}
+                onSelect={() => select(shot.id)}
                 onDragStart={() => (dragId.current = shot.id)}
-                onDrop={() => onDrop(shot.id)}
+                onReorderDrop={() => onReorderDrop(shot.id)}
               />
             ))}
           </div>
@@ -130,152 +122,133 @@ function ShotCard({
   selected,
   onSelect,
   onDragStart,
-  onDrop,
+  onReorderDrop,
 }: {
   shot: Shot
   selected: boolean
   onSelect: () => void
   onDragStart: () => void
-  onDrop: () => void
+  onReorderDrop: () => void
 }): React.JSX.Element {
-  const asset = useAssetStore((s) => s.assets.find((a) => a.id === shot.inputAssetId))
-  const output = useShotStore((s) => s.outputs[shot.id])
-  const busy = useShotStore((s) => s.busyId === shot.id)
-  const { rename, remove, linkShot, pullResult } = useShotStore()
-  const setMode = useUiStore((s) => s.setMode)
-  const setLinkedWorkflow = useUiStore((s) => s.setLinkedWorkflow)
-  const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(shot.name)
-  const inputUrl = asset ? mediaUrl(asset.filePath) : null
-  const outputUrl = output ? mediaUrl(output.filePath) : null
-  const linked = !!shot.comfyWorkflowName
+  const inputs = useShotStore((s) => s.inputsByShot[shot.id])
+  const takes = useShotStore((s) => s.takesByShot[shot.id])
+  const addInputs = useShotStore((s) => s.addInputs)
+  const remove = useShotStore((s) => s.remove)
+  const assets = useAssetStore((s) => s.assets)
+  const [over, setOver] = useState(false)
 
-  const onLink = async (e: React.MouseEvent): Promise<void> => {
-    e.stopPropagation()
-    const result = await linkShot(shot.id)
-    setLinkedWorkflow(result?.comfyWorkflowName ?? shot.comfyWorkflowName)
-    setMode('generate')
-  }
+  const inputThumbs: Thumb[] = (inputs ?? [])
+    .map((i) => assets.find((a) => a.id === i.assetId))
+    .filter((a): a is NonNullable<typeof a> => !!a)
+    .map((a) => ({ key: a.id, url: mediaUrl(a.filePath), kind: a.kind }))
 
-  const commitName = (): void => {
-    setEditing(false)
-    const trimmed = name.trim()
-    if (trimmed && trimmed !== shot.name) void rename(shot.id, trimmed)
-    else setName(shot.name)
+  const outputThumbs: Thumb[] = (takes ?? []).map((t) => ({
+    key: t.id,
+    url: mediaUrl(t.filePath),
+    kind: t.kind,
+    hero: t.id === shot.heroTakeId,
+  }))
+
+  const onDrop = (e: React.DragEvent): void => {
+    setOver(false)
+    const ids = getAssetDragIds(e.dataTransfer)
+    if (ids.length > 0) {
+      e.preventDefault()
+      e.stopPropagation() // a library asset → add as inputs, not a new shot / reorder
+      void addInputs(shot.id, ids)
+    } else {
+      onReorderDrop()
+    }
   }
 
   return (
     <div
-      draggable={!editing}
+      draggable
       onDragStart={onDragStart}
-      onDragOver={(e) => e.preventDefault()}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes(ASSET_DND_TYPE)) {
+          e.preventDefault()
+          setOver(true)
+        } else {
+          e.preventDefault()
+        }
+      }}
+      onDragLeave={() => setOver(false)}
       onDrop={onDrop}
       onClick={onSelect}
-      className={`group flex w-44 shrink-0 flex-col rounded-lg border ${
-        selected ? 'border-accent' : 'border-border'
+      className={`group flex w-48 shrink-0 cursor-pointer flex-col gap-1.5 rounded-lg border p-2 ${
+        over ? 'border-accent ring-1 ring-accent' : selected ? 'border-accent' : 'border-border'
       } bg-panel`}
     >
-      <div className="flex items-center justify-between px-2 py-1">
-        {editing ? (
-          <input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitName()
-              if (e.key === 'Escape') {
-                setName(shot.name)
-                setEditing(false)
-              }
-            }}
-            onBlur={commitName}
-            className="w-full rounded border border-accent bg-surface px-1 text-xs text-zinc-100 outline-none"
-          />
-        ) : (
-          <span
-            onDoubleClick={(e) => {
-              e.stopPropagation()
-              setEditing(true)
-            }}
-            className="flex items-center gap-1 truncate text-xs font-medium text-zinc-200"
-            title="Double-click to rename"
-          >
-            {linked && <span title="Linked to a ComfyUI workflow">🔗</span>}
-            {shot.name}
-          </span>
-        )}
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1 truncate text-xs font-medium text-zinc-200">
+          {shot.comfyWorkflowName && <span title="Linked to a ComfyUI workflow">🔗</span>}
+          {shot.name}
+        </span>
         <button
           onClick={(e) => {
             e.stopPropagation()
             void remove(shot.id)
           }}
           title="Delete shot"
-          className="ml-1 hidden text-xs text-zinc-500 group-hover:block hover:text-red-400"
+          className="hidden text-xs text-zinc-500 group-hover:block hover:text-red-400"
         >
           ✕
         </button>
       </div>
 
-      <Row label="Input">
-        {inputUrl ? (
-          asset?.kind === 'video' ? (
-            <video src={inputUrl} muted preload="metadata" className="h-full w-full object-cover" />
-          ) : (
-            <img src={inputUrl} alt="" className="h-full w-full object-cover" />
-          )
-        ) : (
-          <span className="text-[10px] text-zinc-600">missing</span>
-        )}
-      </Row>
-
-      <Row label="Output">
-        {outputUrl ? (
-          output?.kind === 'video' ? (
-            <video
-              src={outputUrl}
-              muted
-              preload="metadata"
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <img src={outputUrl} alt="" className="h-full w-full object-cover" />
-          )
-        ) : (
-          <span className="text-[10px] text-zinc-600">no output yet</span>
-        )}
-      </Row>
-
-      <div className="flex gap-1 border-t border-border p-1">
-        <button
-          disabled={busy}
-          onClick={(e) => void onLink(e)}
-          className="flex-1 rounded bg-accent px-1 py-1 text-[10px] font-medium text-white disabled:opacity-40"
-        >
-          {busy ? '…' : linked ? 'Open Workflow' : 'Link'}
-        </button>
-        <button
-          disabled={busy}
-          onClick={(e) => {
-            e.stopPropagation()
-            void pullResult(shot.id)
-          }}
-          className="flex-1 rounded border border-border px-1 py-1 text-[10px] text-zinc-300 hover:bg-surface disabled:opacity-40"
-        >
-          {busy ? '…' : 'Pull result'}
-        </button>
-      </div>
+      <Stack label="In" thumbs={inputThumbs} />
+      <Stack label="Out" thumbs={outputThumbs} emptyText="no output" />
     </div>
   )
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
+function Stack({
+  label,
+  thumbs,
+  emptyText,
+}: {
+  label: string
+  thumbs: Thumb[]
+  emptyText?: string
+}): React.JSX.Element {
+  const shown = thumbs.slice(0, STACK_MAX)
+  const overflow = thumbs.length - shown.length
   return (
-    <div className="border-t border-border">
-      <div className="px-2 pt-1 text-[9px] uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="m-1 flex aspect-video items-center justify-center overflow-hidden rounded bg-black/40">
-        {children}
-      </div>
+    <div className="flex items-center gap-1">
+      <span className="w-6 shrink-0 text-[9px] uppercase tracking-wide text-zinc-500">{label}</span>
+      {thumbs.length === 0 ? (
+        <span className="text-[10px] text-zinc-600">{emptyText ?? 'empty'}</span>
+      ) : (
+        <div className="flex items-center gap-1">
+          {shown.map((t) => (
+            <Tile key={t.key} thumb={t} />
+          ))}
+          {overflow > 0 && (
+            <span className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface text-[10px] text-zinc-400">
+              +{overflow}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Tile({ thumb }: { thumb: Thumb }): React.JSX.Element {
+  return (
+    <div
+      className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded border bg-black/40 ${
+        thumb.hero ? 'border-accent ring-1 ring-accent' : 'border-border'
+      }`}
+    >
+      {thumb.kind === 'image' && (
+        <img src={thumb.url} alt="" className="h-full w-full object-cover" />
+      )}
+      {thumb.kind === 'video' && (
+        <video src={thumb.url} muted preload="metadata" className="h-full w-full object-cover" />
+      )}
+      {thumb.kind === 'audio' && <span className="text-sm">🎵</span>}
     </div>
   )
 }

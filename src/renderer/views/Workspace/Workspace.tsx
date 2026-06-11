@@ -11,6 +11,7 @@ import { PreviewPanel } from '../Preview/PreviewPanel'
 import { TimelinePanel } from '../Timeline/TimelinePanel'
 import { MoodboardPanel } from '../Moodboard/MoodboardPanel'
 import { GeneratePanel } from '../Generate/GeneratePanel'
+import { ShotInspector } from '../ShotInspector/ShotInspector'
 
 /** The main editing shell (iMovie-style): assets left, preview right, timeline bottom. */
 export function Workspace({ project }: { project: Project }): React.JSX.Element {
@@ -20,6 +21,7 @@ export function Workspace({ project }: { project: Project }): React.JSX.Element 
   const resetAssets = useAssetStore((s) => s.reset)
   const resetBoard = useMoodboardStore((s) => s.reset)
   const resetShots = useShotStore((s) => s.reset)
+  const selectedShotId = useShotStore((s) => s.selectedId)
 
   const onClose = (): void => {
     setMode('edit')
@@ -31,7 +33,7 @@ export function Workspace({ project }: { project: Project }): React.JSX.Element 
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-surface px-3">
+      <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-border bg-surface px-3">
         <div className="flex items-center gap-2.5">
           <Logo size={26} />
           <span className="text-sm font-semibold text-white">Storyline</span>
@@ -39,7 +41,9 @@ export function Workspace({ project }: { project: Project }): React.JSX.Element 
           <span className="text-sm text-zinc-300">{project.name}</span>
         </div>
 
-        <ModeToggle mode={mode} onChange={setMode} />
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <ModeToggle mode={mode} onChange={setMode} />
+        </div>
 
         <div className="flex items-center gap-2">
           <button
@@ -65,7 +69,7 @@ export function Workspace({ project }: { project: Project }): React.JSX.Element 
                 </Panel>
                 <ResizeHandle orientation="vertical" />
                 <Panel defaultSize={70} minSize={30}>
-                  <PreviewPanel />
+                  {selectedShotId ? <ShotInspector shotId={selectedShotId} /> : <PreviewPanel />}
                 </Panel>
               </PanelGroup>
             </Panel>
@@ -88,7 +92,7 @@ function ModeToggle({
   onChange: (m: WorkspaceMode) => void
 }): React.JSX.Element {
   const labels: Record<WorkspaceMode, string> = {
-    edit: 'Create',
+    edit: 'Sequence',
     moodboard: 'Moodboard',
     generate: 'Generate',
   }

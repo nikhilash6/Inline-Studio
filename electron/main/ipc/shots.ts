@@ -1,6 +1,6 @@
 /** IPC handlers for shots + their takes. */
 import { IpcChannels } from '@shared/ipc'
-import type { Shot, Take } from '@shared/types'
+import type { Shot, Take, ShotInput } from '@shared/types'
 import { handle } from './handler'
 import {
   listShots,
@@ -12,6 +12,12 @@ import {
   setHero,
   listTakes,
   heroTakes,
+  listInputs,
+  addInput,
+  removeInput,
+  reorderInputs,
+  listAllTakes,
+  deleteTake,
 } from '../shots/store'
 
 function str(v: unknown, label: string): string {
@@ -44,4 +50,21 @@ export function registerShotHandlers(): void {
     listTakes(str(shotId, 'shot id')),
   )
   handle<[], Take[]>(IpcChannels.shots.heroTakes, () => heroTakes())
+  handle<[], ShotInput[]>(IpcChannels.shots.listInputs, () => listInputs())
+  handle<[string, string], ShotInput>(IpcChannels.shots.addInput, (shotId, assetId) =>
+    addInput(str(shotId, 'shot id'), str(assetId, 'asset id')),
+  )
+  handle<[string, string], void>(IpcChannels.shots.removeInput, (shotId, assetId) =>
+    removeInput(str(shotId, 'shot id'), str(assetId, 'asset id')),
+  )
+  handle<[string, string[]], void>(IpcChannels.shots.reorderInputs, (shotId, orderedAssetIds) => {
+    if (!Array.isArray(orderedAssetIds) || orderedAssetIds.some((x) => typeof x !== 'string')) {
+      throw new Error('Invalid input ordering.')
+    }
+    reorderInputs(str(shotId, 'shot id'), orderedAssetIds)
+  })
+  handle<[], Take[]>(IpcChannels.shots.listAllTakes, () => listAllTakes())
+  handle<[string], void>(IpcChannels.shots.deleteTake, (takeId) =>
+    deleteTake(str(takeId, 'take id')),
+  )
 }

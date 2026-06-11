@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import type { Take, ComfyStatus, AssetKind, Shot } from '@shared/types'
 import { getSettings } from '../settings/store'
 import { getOpenProjectFolder } from '../db'
-import { addTake, getShotById, linkWorkflow, shotInputAsset } from '../shots/store'
+import { addTake, getShotById, linkWorkflow, shotInputFileNames } from '../shots/store'
 import { getCurrentProject } from '../project/store'
 
 function baseUrl(): string {
@@ -47,10 +47,11 @@ function sanitizeSegment(name: string): string {
 }
 
 /** A minimal, guaranteed-to-load LiteGraph workflow with a Note titled after the shot. */
-function buildSeedWorkflow(shotName: string, inputFileName: string | null): unknown {
+function buildSeedWorkflow(shotName: string, inputFileNames: string[]): unknown {
+  const inputsLine = inputFileNames.length > 0 ? `\nInputs:\n  ${inputFileNames.join('\n  ')}` : ''
   const noteText =
     `Storyline shot: ${shotName}` +
-    (inputFileName ? `\nInput file: ${inputFileName}` : '') +
+    inputsLine +
     `\n\nBuild this shot's workflow here, then Save (the link persists).`
   return {
     last_node_id: 1,
@@ -95,8 +96,7 @@ export async function linkShotWorkflow(shotId: string): Promise<Shot> {
   const shotSeg = sanitizeSegment(shot.name)
   const name = `Storyline/${projectSeg}/${shotSeg} (${shot.id.slice(0, 6)})`
 
-  const input = shotInputAsset(shotId)
-  const workflow = buildSeedWorkflow(shot.name, input?.fileName ?? null)
+  const workflow = buildSeedWorkflow(shot.name, shotInputFileNames(shotId))
 
   const file = encodeURIComponent(`workflows/${name}.json`)
   const res = await fetch(`${baseUrl()}/userdata/${file}?overwrite=false`, {

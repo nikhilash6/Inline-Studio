@@ -17,6 +17,7 @@ import type {
   MoodboardItemData,
   Shot,
   Take,
+  ShotInput,
   AppSettings,
   ComfyStatus,
   ExportResult,
@@ -56,6 +57,12 @@ export const IpcChannels = {
     setHero: 'shots:setHero',
     listTakes: 'shots:listTakes',
     heroTakes: 'shots:heroTakes',
+    listInputs: 'shots:listInputs',
+    addInput: 'shots:addInput',
+    removeInput: 'shots:removeInput',
+    reorderInputs: 'shots:reorderInputs',
+    listAllTakes: 'shots:listAllTakes',
+    deleteTake: 'shots:deleteTake',
   },
   comfy: {
     status: 'comfy:status',
@@ -158,6 +165,18 @@ export interface StorylineApi {
     listTakes(shotId: string): Promise<Result<Take[]>>
     /** The hero (Output) take of every shot that has one. */
     heroTakes(): Promise<Result<Take[]>>
+    /** All shot inputs across the project (group by shotId in the renderer). */
+    listInputs(): Promise<Result<ShotInput[]>>
+    /** Append a library asset as an input of the shot. */
+    addInput(shotId: string, assetId: string): Promise<Result<ShotInput>>
+    /** Remove an input; refused if it's the shot's last input. */
+    removeInput(shotId: string, assetId: string): Promise<Result<void>>
+    /** Persist a new input ordering for the shot. */
+    reorderInputs(shotId: string, orderedAssetIds: string[]): Promise<Result<void>>
+    /** All takes across the project (group by shotId in the renderer). */
+    listAllTakes(): Promise<Result<Take[]>>
+    /** Delete a generated take (clears it as hero if it was). */
+    deleteTake(takeId: string): Promise<Result<void>>
   }
   comfy: {
     /** Is the configured ComfyUI reachable? */

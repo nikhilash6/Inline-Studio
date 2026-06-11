@@ -5,7 +5,8 @@
  */
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import type { Shot, Take, ShotKind, AssetKind } from '@shared/types'
+import { existsSync, unlinkSync } from 'node:fs'
+import type { Shot, Take, ShotInput, ShotKind, AssetKind } from '@shared/types'
 import { getDb, getOpenProjectFolder } from '../db'
 import { importViaDialog } from '../assets/store'
 
@@ -59,6 +60,17 @@ function rowToTake(row: TakeRow): Take {
     comfyPromptId: row.comfy_prompt_id,
     createdAt: row.created_at,
   }
+}
+
+interface ShotInputRow {
+  id: string
+  shot_id: string
+  asset_id: string
+  position: number
+}
+
+function rowToShotInput(row: ShotInputRow): ShotInput {
+  return { id: row.id, shotId: row.shot_id, assetId: row.asset_id, position: row.position }
 }
 
 function projectId(): string {
@@ -124,6 +136,12 @@ function createShot(asset: { id: string; kind: AssetKind }): Shot {
        (id, sequence_id, name, kind, position, input_asset_id, hero_take_id, workflow_template_id, comfy_workflow_name, created_at, updated_at)
      VALUES (@id, @sequenceId, @name, @kind, @position, @inputAssetId, @heroTakeId, @workflowTemplateId, @comfyWorkflowName, @createdAt, @updatedAt)`,
   ).run(shot)
+  // Every shot starts with exactly one input (the asset it was created from).
+  db.prepare('INSERT INTO shot_inputs (id, shot_id, asset_id, position) VALUES (?, ?, ?, 0)').run(
+    randomUUID(),
+    shot.id,
+    asset.id,
+  )
   return shot
 }
 
@@ -168,9 +186,99 @@ export function deleteShot(id: string): void {
   const db = getDb()
   const tx = db.transaction(() => {
     db.prepare('DELETE FROM takes WHERE shot_id = ?').run(id)
+    db.prepare('DELETE FROM shot_inputs WHERE shot_id = ?').run(id)
     db.prepare('DELETE FROM shots WHERE id = ?').run(id)
   })
   tx()
+}
+
+/** All shot inputs across the project (renderer groups by shotId). */
+export function listInputs(): ShotInput[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM shot_inputs ORDER BY shot_id, position')
+    .all() as ShotInputRow[]
+  return rows.map(rowToShotInput)
+}
+
+function shotInputRows(shotId: string): ShotInputRow[] {
+  return getDb()
+    .prepare('SELECT * FROM shot_inputs WHERE shot_id = ? ORDER BY position')
+    .all(shotId) as ShotInputRow[]
+}
+
+export function addInput(shotId: string, assetId: string): ShotInput {
+  getShot(shotId)
+  const existing = shotInputRows(shotId)
+  const dup = existing.find((r) => r.asset_id === assetId)
+  if (dup) return rowToShotInput(dup)
+  const input: ShotInput = {
+    id: randomUUID(),
+    shotId,
+    assetId,
+    position: existing.length,
+  }
+  getDb()
+    .prepare('INSERT INTO shot_inputs (id, shot_id, asset_id, position) VALUES (?, ?, ?, ?)')
+    .run(input.id, input.shotId, input.assetId, input.position)
+  return input
+}
+
+export function removeInput(shotId: string, assetId: string): void {
+  const rows = shotInputRows(shotId)
+  if (rows.length <= 1) throw new Error('A shot must keep at least one input.')
+  getDb().prepare('DELETE FROM shot_inputs WHERE shot_id = ? AND asset_id = ?').run(shotId, assetId)
+}
+
+export function reorderInputs(shotId: string, orderedAssetIds: string[]): void {
+  const db = getDb()
+  const stmt = db.prepare('UPDATE shot_inputs SET position = ? WHERE shot_id = ? AND asset_id = ?')
+  const tx = db.transaction(() => {
+    orderedAssetIds.forEach((assetId, index) => stmt.run(index, shotId, assetId))
+  })
+  tx()
+}
+
+/** Input filenames (basenames) of a shot, in order — used to seed the workflow Note. */
+export function shotInputFileNames(shotId: string): string[] {
+  const ids = shotInputRows(shotId).map((r) => r.asset_id)
+  if (ids.length === 0) return []
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = getDb()
+    .prepare(`SELECT id, file_path FROM assets WHERE id IN (${placeholders})`)
+    .all(...ids) as Array<{ id: string; file_path: string }>
+  const byId = new Map(rows.map((r) => [r.id, r.file_path.split('/').pop() ?? r.file_path]))
+  return ids.map((id) => byId.get(id)).filter((n): n is string => !!n)
+}
+
+/** All takes across the project (renderer groups by shotId). */
+export function listAllTakes(): Take[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM takes ORDER BY shot_id, created_at DESC')
+    .all() as TakeRow[]
+  return rows.map(rowToTake)
+}
+
+export function deleteTake(takeId: string): void {
+  const db = getDb()
+  const take = db.prepare('SELECT * FROM takes WHERE id = ?').get(takeId) as TakeRow | undefined
+  if (!take) return
+  const folder = getOpenProjectFolder()
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE shots SET hero_take_id = NULL WHERE hero_take_id = ?').run(takeId)
+    db.prepare('DELETE FROM takes WHERE id = ?').run(takeId)
+  })
+  tx()
+  // Best-effort: remove the generated file from disk.
+  if (folder) {
+    const abs = join(folder, take.file_path)
+    if (existsSync(abs)) {
+      try {
+        unlinkSync(abs)
+      } catch {
+        // ignore
+      }
+    }
+  }
 }
 
 export function setHero(id: string, takeId: string | null): Shot {
@@ -245,28 +353,4 @@ export function linkWorkflow(shotId: string, name: string): Shot {
     .prepare('UPDATE shots SET comfy_workflow_name = ?, updated_at = ? WHERE id = ?')
     .run(name, Date.now(), shotId)
   return getShot(shotId)
-}
-
-/** The shot's input asset filename (basename) and kind, if it has one. */
-export function shotInputAsset(shotId: string): { fileName: string; kind: AssetKind } | null {
-  const shot = getShot(shotId)
-  if (!shot.inputAssetId) return null
-  const asset = getDb()
-    .prepare('SELECT file_path, kind FROM assets WHERE id = ?')
-    .get(shot.inputAssetId) as { file_path: string; kind: AssetKind } | undefined
-  if (!asset) return null
-  return { fileName: asset.file_path.split('/').pop() ?? asset.file_path, kind: asset.kind }
-}
-
-/** Absolute path of a shot's input asset (for uploading to ComfyUI). */
-export function shotInputAbsPath(shotId: string): string {
-  const shot = getShot(shotId)
-  if (!shot.inputAssetId) throw new Error('This shot has no input asset to send.')
-  const asset = getDb()
-    .prepare('SELECT file_path FROM assets WHERE id = ?')
-    .get(shot.inputAssetId) as { file_path: string } | undefined
-  if (!asset) throw new Error('Input asset not found.')
-  const folder = getOpenProjectFolder()
-  if (!folder) throw new Error('No project is open.')
-  return join(folder, asset.file_path)
 }

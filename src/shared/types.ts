@@ -54,6 +54,14 @@ export interface Shot {
   updatedAt: number
 }
 
+/** A library asset used as one of a shot's inputs (a shot can have several). */
+export interface ShotInput {
+  id: string
+  shotId: string
+  assetId: string
+  position: number
+}
+
 /** Every ComfyUI render of a shot becomes an immutable Take. */
 export interface Take {
   id: string

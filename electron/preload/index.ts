@@ -46,6 +46,15 @@ const api: StorylineApi = {
       ipcRenderer.invoke(IpcChannels.shots.setHero, id, takeId),
     listTakes: (shotId: string) => ipcRenderer.invoke(IpcChannels.shots.listTakes, shotId),
     heroTakes: () => ipcRenderer.invoke(IpcChannels.shots.heroTakes),
+    listInputs: () => ipcRenderer.invoke(IpcChannels.shots.listInputs),
+    addInput: (shotId: string, assetId: string) =>
+      ipcRenderer.invoke(IpcChannels.shots.addInput, shotId, assetId),
+    removeInput: (shotId: string, assetId: string) =>
+      ipcRenderer.invoke(IpcChannels.shots.removeInput, shotId, assetId),
+    reorderInputs: (shotId: string, orderedAssetIds: string[]) =>
+      ipcRenderer.invoke(IpcChannels.shots.reorderInputs, shotId, orderedAssetIds),
+    listAllTakes: () => ipcRenderer.invoke(IpcChannels.shots.listAllTakes),
+    deleteTake: (takeId: string) => ipcRenderer.invoke(IpcChannels.shots.deleteTake, takeId),
   },
   comfy: {
     status: () => ipcRenderer.invoke(IpcChannels.comfy.status),

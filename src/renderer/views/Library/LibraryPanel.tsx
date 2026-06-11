@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { mediaUrl } from '@shared/media'
 import type { Asset, AssetFolder } from '@shared/types'
 import { useAssetStore, folderPath } from '../../store/assetStore'
-import { ASSET_DND_TYPE } from '../../lib/dnd'
+import { setAssetDragPayload } from '../../lib/dnd'
 
 /** Left panel: folder navigation + import + a grid of folders and media. */
 export function LibraryPanel(): React.JSX.Element {
@@ -21,6 +21,11 @@ export function LibraryPanel(): React.JSX.Element {
     select,
   } = useAssetStore()
   const [newFolderName, setNewFolderName] = useState<string | null>(null)
+  // Multi-selection for dragging several assets at once (⌘/Ctrl-click to toggle).
+  const [dragSel, setDragSel] = useState<string[]>([])
+
+  const toggleDragSel = (id: string): void =>
+    setDragSel((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]))
 
   useEffect(() => {
     void load()
@@ -94,7 +99,13 @@ export function LibraryPanel(): React.JSX.Element {
             key={asset.id}
             asset={asset}
             selected={asset.id === selectedId}
-            onSelect={() => select(asset.id)}
+            dragSelected={dragSel.includes(asset.id)}
+            dragIds={dragSel}
+            onSelect={() => {
+              setDragSel([])
+              select(asset.id)
+            }}
+            onToggleDrag={() => toggleDragSel(asset.id)}
           />
         ))}
 
@@ -170,24 +181,34 @@ function FolderTile({
 function AssetThumb({
   asset,
   selected,
+  dragSelected,
+  dragIds,
   onSelect,
+  onToggleDrag,
 }: {
   asset: Asset
   selected: boolean
+  dragSelected: boolean
+  dragIds: string[]
   onSelect: () => void
+  onToggleDrag: () => void
 }): React.JSX.Element {
   const url = mediaUrl(asset.filePath)
   return (
     <button
-      onClick={onSelect}
+      onClick={(e) => (e.metaKey || e.ctrlKey ? onToggleDrag() : onSelect())}
       draggable
       onDragStart={(e) => {
-        e.dataTransfer.setData(ASSET_DND_TYPE, asset.id)
-        e.dataTransfer.effectAllowed = 'copy'
+        const ids = dragSelected && dragIds.length > 0 ? dragIds : [asset.id]
+        setAssetDragPayload(e.dataTransfer, ids)
       }}
-      title={`${asset.name} — drag onto the Shots Sequence to add a shot`}
+      title={`${asset.name} — drag onto the Shots Sequence (⌘/Ctrl-click to multi-select)`}
       className={`group flex flex-col overflow-hidden rounded-md border text-left ${
-        selected ? 'border-accent' : 'border-border hover:border-zinc-600'
+        dragSelected
+          ? 'border-accent ring-1 ring-accent'
+          : selected
+            ? 'border-accent'
+            : 'border-border hover:border-zinc-600'
       }`}
     >
       <div className="flex aspect-video items-center justify-center bg-black/40">
