@@ -6,27 +6,58 @@ import type { ComfyWebview } from '../../types/webview'
 
 /**
  * Code injected INTO the embedded ComfyUI page (via webview.executeJavaScript, which
- * bypasses cross-origin limits in Electron) to open a saved workflow on the canvas.
- * Waits for the frontend, fetches the workflow same-origin from userdata, and loads it.
- * Best-effort: leans on `window.app.loadGraphData`, which varies by Comfy version.
+ * bypasses cross-origin limits in Electron) to open a shot's saved workflow.
+ *
+ * Preferred: open the *saved* workflow file through ComfyUI's workflow store (exposed
+ * on window.comfyAPI) so it becomes that named tab and Save overwrites the same file —
+ * which keeps the shot↔workflow link intact. Falls back to loadGraphData (which opens
+ * an Unsaved Workflow) only if the store isn't reachable. Resolves to a status string:
+ * 'opened' (saved tab) | 'loaded' (unsaved fallback) | 'failed'.
  */
 function openWorkflowScript(name: string): string {
   const n = JSON.stringify(name)
   return `(async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const waitFor = async (fn) => {
       const start = Date.now();
       while (Date.now() - start < 8000) {
         try { if (fn()) return true; } catch (e) {}
-        await new Promise((r) => setTimeout(r, 200));
+        await sleep(200);
       }
       return false;
     };
-    if (!(await waitFor(() => window.app && typeof window.app.loadGraphData === 'function'))) return;
+    await waitFor(() => window.app && window.app.graph);
+    const path = 'workflows/' + ${n} + '.json';
+
+    // 1) Open the SAVED workflow via the workflow store (so Save targets the same file).
     try {
-      const res = await fetch('/userdata/' + encodeURIComponent('workflows/' + ${n} + '.json'));
-      if (!res.ok) return;
-      window.app.loadGraphData(await res.json());
-    } catch (e) { console.error('[storyline] open workflow failed', e); }
+      const reg = window.comfyAPI || {};
+      let useWorkflowStore = reg.workflowStore && reg.workflowStore.useWorkflowStore;
+      if (!useWorkflowStore) {
+        for (const k in reg) {
+          if (reg[k] && reg[k].useWorkflowStore) { useWorkflowStore = reg[k].useWorkflowStore; break; }
+        }
+      }
+      if (useWorkflowStore) {
+        const store = useWorkflowStore();
+        let wf = null;
+        if (typeof store.getWorkflowByPath === 'function') wf = store.getWorkflowByPath(path);
+        if (!wf && Array.isArray(store.workflows)) {
+          wf = store.workflows.find((w) =>
+            w && (w.path === path || w.key === path || (w.path && w.path.endsWith(${n} + '.json'))));
+        }
+        if (wf && typeof store.openWorkflow === 'function') { await store.openWorkflow(wf); return 'opened'; }
+      }
+    } catch (e) { console.error('[storyline] store open failed', e); }
+
+    // 2) Fallback: load the graph (opens as an Unsaved Workflow).
+    try {
+      if (window.app && typeof window.app.loadGraphData === 'function') {
+        const res = await fetch('/userdata/' + encodeURIComponent(path));
+        if (res.ok) { window.app.loadGraphData(await res.json(), true, true, ${n}); return 'loaded'; }
+      }
+    } catch (e) { console.error('[storyline] loadGraphData failed', e); }
+    return 'failed';
   })();`
 }
 
@@ -97,11 +128,16 @@ export function GeneratePanel(): React.JSX.Element {
   }, [running])
 
   // When a shot is linked (or changes), drive the embedded ComfyUI to open it.
+  // If the saved workflow tab opens cleanly, clear the hint (no sidebar step needed).
   useEffect(() => {
-    if (webviewReady && linkedWorkflow && webviewRef.current) {
-      void webviewRef.current.executeJavaScript(openWorkflowScript(linkedWorkflow))
-    }
-  }, [webviewReady, linkedWorkflow])
+    if (!webviewReady || !linkedWorkflow || !webviewRef.current) return
+    webviewRef.current
+      .executeJavaScript(openWorkflowScript(linkedWorkflow))
+      .then((result) => {
+        if (result === 'opened') setLinkedWorkflow(null)
+      })
+      .catch(() => {})
+  }, [webviewReady, linkedWorkflow, setLinkedWorkflow])
 
   const comfyArgs = dirs
     ? `--input-directory "${dirs.inputDir}" --output-directory "${dirs.outputDir}"`
@@ -181,8 +217,9 @@ export function GeneratePanel(): React.JSX.Element {
       {linkedWorkflow && (
         <div className="flex items-center justify-between gap-2 border-b border-accent/40 bg-accent/10 px-3 py-2">
           <span className="text-[11px] text-zinc-200">
-            Open <span className="font-mono text-zinc-100">{linkedWorkflow}</span> from ComfyUI's{' '}
-            <span className="text-zinc-100">Workflows</span> sidebar to edit this shot, then Save.
+            Couldn't auto-open the saved workflow. Open{' '}
+            <span className="font-mono text-zinc-100">{linkedWorkflow}</span> from ComfyUI's{' '}
+            <span className="text-zinc-100">Workflows</span> sidebar so Save keeps the link.
           </span>
           <button
             onClick={() => setLinkedWorkflow(null)}
