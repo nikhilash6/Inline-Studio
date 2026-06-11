@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ComfyStatus, ProjectMediaDirs } from '@shared/types'
+import type { ComfyStatus, ComfyOutput, ComfyRun, ProjectMediaDirs } from '@shared/types'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useUiStore } from '../../store/uiStore'
+import { useShotStore } from '../../store/shotStore'
 import type { ComfyWebview } from '../../types/webview'
 
 /**
@@ -70,6 +71,9 @@ export function GeneratePanel(): React.JSX.Element {
   const { comfyUrl, load, setComfyUrl } = useSettingsStore()
   const linkedWorkflow = useUiStore((s) => s.linkedWorkflow)
   const setLinkedWorkflow = useUiStore((s) => s.setLinkedWorkflow)
+  const activeShotId = useUiStore((s) => s.activeShotId)
+  const activeShot = useShotStore((s) => s.shots.find((sh) => sh.id === activeShotId))
+  const captureOutput = useShotStore((s) => s.captureOutput)
   const [status, setStatus] = useState<ComfyStatus | null>(null)
   const [draftUrl, setDraftUrl] = useState('')
   const [dirs, setDirs] = useState<ProjectMediaDirs | null>(null)
@@ -77,9 +81,19 @@ export function GeneratePanel(): React.JSX.Element {
   const [showPaths, setShowPaths] = useState(false)
   const webviewRef = useRef<ComfyWebview | null>(null)
   const [webviewReady, setWebviewReady] = useState(false)
+  // Capture strip: the latest finished run + which of its outputs we've captured.
+  const [run, setRun] = useState<ComfyRun | null>(null)
+  const [captured, setCaptured] = useState<Set<string>>(new Set())
+  const seenPromptId = useRef<string | null>(null)
 
   const running = status?.running ?? false
   const url = status?.url ?? comfyUrl
+
+  const onCapture = (output: ComfyOutput): void => {
+    if (!activeShotId) return
+    void captureOutput(activeShotId, output)
+    setCaptured((s) => new Set(s).add(output.url))
+  }
 
   const copy = (key: string, text: string): void => {
     void window.storyline.clipboard.writeText(text)
@@ -115,6 +129,36 @@ export function GeneratePanel(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comfyUrl])
 
+  // Poll /history while running; when a NEW run finishes, show its outputs to capture.
+  useEffect(() => {
+    if (!running) return
+    let cancelled = false
+    const poll = async (): Promise<void> => {
+      try {
+        const res = await window.storyline.comfy.latestRun()
+        if (cancelled || !res.ok || !res.value) return
+        const latest = res.value
+        if (seenPromptId.current === null) {
+          seenPromptId.current = latest.promptId // baseline: ignore pre-existing runs
+        } else if (latest.promptId !== seenPromptId.current) {
+          seenPromptId.current = latest.promptId
+          if (latest.outputs.length > 0) {
+            setRun(latest)
+            setCaptured(new Set())
+          }
+        }
+      } catch {
+        // ignore transient errors
+      }
+    }
+    void poll()
+    const timer = setInterval(() => void poll(), 2000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [running])
+
   // Track when the embedded ComfyUI page has loaded enough to drive.
   useEffect(() => {
     const wv = webviewRef.current
@@ -131,12 +175,12 @@ export function GeneratePanel(): React.JSX.Element {
   // If the saved workflow tab opens cleanly, clear the hint (no sidebar step needed).
   useEffect(() => {
     if (!webviewReady || !linkedWorkflow || !webviewRef.current) return
+    // One-shot: clear after attempting so a remount can't replay a stale workflow
+    // and re-select the wrong shot's tab.
     webviewRef.current
       .executeJavaScript(openWorkflowScript(linkedWorkflow))
-      .then((result) => {
-        if (result === 'opened') setLinkedWorkflow(null)
-      })
       .catch(() => {})
+      .finally(() => setLinkedWorkflow(null))
   }, [webviewReady, linkedWorkflow, setLinkedWorkflow])
 
   const comfyArgs = dirs
@@ -232,7 +276,99 @@ export function GeneratePanel(): React.JSX.Element {
             </p>
           </div>
         )}
+
+        {run && run.outputs.length > 0 && (
+          <CaptureStrip
+            run={run}
+            captured={captured}
+            targetShotName={activeShot?.name ?? null}
+            onCapture={onCapture}
+            onDismiss={() => setRun(null)}
+          />
+        )}
       </div>
+    </div>
+  )
+}
+
+function CaptureStrip({
+  run,
+  captured,
+  targetShotName,
+  onCapture,
+  onDismiss,
+}: {
+  run: ComfyRun
+  captured: Set<string>
+  targetShotName: string | null
+  onCapture: (output: ComfyOutput) => void
+  onDismiss: () => void
+}): React.JSX.Element {
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-10 border-t border-border bg-panel/95 p-2 backdrop-blur">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[11px] text-zinc-300">
+          New outputs ·{' '}
+          {targetShotName ? (
+            <>
+              capture to <span className="font-medium text-white">Shot {targetShotName}</span>
+            </>
+          ) : (
+            <span className="text-amber-400">open a shot's workflow to capture</span>
+          )}
+        </span>
+        <button
+          onClick={onDismiss}
+          className="rounded border border-border px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-surface"
+        >
+          Dismiss
+        </button>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {run.outputs.map((output) => (
+          <CaptureTile
+            key={output.url}
+            output={output}
+            captured={captured.has(output.url)}
+            disabled={!targetShotName}
+            onCapture={() => onCapture(output)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CaptureTile({
+  output,
+  captured,
+  disabled,
+  onCapture,
+}: {
+  output: ComfyOutput
+  captured: boolean
+  disabled: boolean
+  onCapture: () => void
+}): React.JSX.Element {
+  return (
+    <div className="group relative h-24 w-24 shrink-0 overflow-hidden rounded border border-border bg-black/40">
+      {output.kind === 'video' ? (
+        <video src={output.url} muted preload="metadata" className="h-full w-full object-cover" />
+      ) : (
+        <img src={output.url} alt="" className="h-full w-full object-cover" />
+      )}
+      <button
+        onClick={onCapture}
+        disabled={disabled || captured}
+        className="absolute inset-0 flex items-center justify-center bg-black/60 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:cursor-not-allowed"
+      >
+        {captured ? '✓ Captured' : 'Update shot output'}
+      </button>
+      {captured && (
+        <span className="absolute right-1 top-1 rounded bg-accent px-1 text-[9px] text-white">
+          ✓
+        </span>
+      )}
     </div>
   )
 }

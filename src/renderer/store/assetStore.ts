@@ -18,6 +18,7 @@ interface AssetState {
 
   load: () => Promise<void>
   import: () => Promise<void>
+  remove: (assetId: string) => Promise<void>
   createFolder: (name: string) => Promise<void>
   deleteFolder: (id: string) => Promise<void>
   navigate: (folderId: string | null) => void
@@ -61,6 +62,20 @@ export const useAssetStore = create<AssetState>((set, get) => ({
       }))
     } catch (e) {
       set({ loading: false, error: ipcErrorMessage(e) })
+    }
+  },
+
+  remove: async (assetId: string) => {
+    set({ error: null })
+    try {
+      const res = await window.storyline.assets.delete(assetId)
+      if (!res.ok) return set({ error: res.error })
+      set((s) => ({
+        assets: s.assets.filter((a) => a.id !== assetId),
+        selectedId: s.selectedId === assetId ? null : s.selectedId,
+      }))
+    } catch (e) {
+      set({ error: ipcErrorMessage(e) })
     }
   },
 

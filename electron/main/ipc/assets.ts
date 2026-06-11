@@ -2,7 +2,7 @@
 import { IpcChannels } from '@shared/ipc'
 import type { Asset } from '@shared/types'
 import { handle } from './handler'
-import { importViaDialog, listAssets } from '../assets/store'
+import { importViaDialog, listAssets, deleteAsset } from '../assets/store'
 
 function asFolderId(value: unknown): string | null {
   if (value === null || value === undefined) return null
@@ -15,4 +15,8 @@ export function registerAssetHandlers(): void {
     importViaDialog(asFolderId(folderId)),
   )
   handle<[], Asset[]>(IpcChannels.assets.list, () => listAssets())
+  handle<[string], void>(IpcChannels.assets.delete, (assetId) => {
+    if (typeof assetId !== 'string' || assetId.length === 0) throw new Error('Invalid asset id.')
+    deleteAsset(assetId)
+  })
 }

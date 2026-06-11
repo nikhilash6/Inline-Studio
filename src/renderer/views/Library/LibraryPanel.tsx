@@ -15,6 +15,7 @@ export function LibraryPanel(): React.JSX.Element {
     error,
     load,
     import: importAssets,
+    remove,
     createFolder,
     deleteFolder,
     navigate,
@@ -106,6 +107,7 @@ export function LibraryPanel(): React.JSX.Element {
               select(asset.id)
             }}
             onToggleDrag={() => toggleDragSel(asset.id)}
+            onDelete={() => void remove(asset.id)}
           />
         ))}
 
@@ -185,6 +187,7 @@ function AssetThumb({
   dragIds,
   onSelect,
   onToggleDrag,
+  onDelete,
 }: {
   asset: Asset
   selected: boolean
@@ -192,35 +195,48 @@ function AssetThumb({
   dragIds: string[]
   onSelect: () => void
   onToggleDrag: () => void
+  onDelete: () => void
 }): React.JSX.Element {
   const url = mediaUrl(asset.filePath)
   return (
-    <button
-      onClick={(e) => (e.metaKey || e.ctrlKey ? onToggleDrag() : onSelect())}
-      draggable
-      onDragStart={(e) => {
-        const ids = dragSelected && dragIds.length > 0 ? dragIds : [asset.id]
-        setAssetDragPayload(e.dataTransfer, ids)
-      }}
-      title={`${asset.name} — drag onto the Shots Sequence (⌘/Ctrl-click to multi-select)`}
-      className={`group flex flex-col overflow-hidden rounded-md border text-left ${
-        dragSelected
-          ? 'border-accent ring-1 ring-accent'
-          : selected
-            ? 'border-accent'
-            : 'border-border hover:border-zinc-600'
-      }`}
-    >
-      <div className="flex aspect-video items-center justify-center bg-black/40">
-        {asset.kind === 'image' && (
-          <img src={url} alt={asset.name} className="h-full w-full object-cover" />
-        )}
-        {asset.kind === 'video' && (
-          <video src={url} muted preload="metadata" className="h-full w-full object-cover" />
-        )}
-        {asset.kind === 'audio' && <span className="text-2xl">🎵</span>}
-      </div>
-      <span className="truncate px-1.5 py-1 text-[11px] text-zinc-400">{asset.name}</span>
-    </button>
+    <div className="group relative">
+      <button
+        onClick={(e) => (e.metaKey || e.ctrlKey ? onToggleDrag() : onSelect())}
+        draggable
+        onDragStart={(e) => {
+          const ids = dragSelected && dragIds.length > 0 ? dragIds : [asset.id]
+          setAssetDragPayload(e.dataTransfer, ids)
+        }}
+        title={`${asset.name} — drag onto the Shots Sequence (⌘/Ctrl-click to multi-select)`}
+        className={`flex w-full flex-col overflow-hidden rounded-md border text-left ${
+          dragSelected
+            ? 'border-accent ring-1 ring-accent'
+            : selected
+              ? 'border-accent'
+              : 'border-border hover:border-zinc-600'
+        }`}
+      >
+        <div className="flex aspect-video items-center justify-center bg-black/40">
+          {asset.kind === 'image' && (
+            <img src={url} alt={asset.name} className="h-full w-full object-cover" />
+          )}
+          {asset.kind === 'video' && (
+            <video src={url} muted preload="metadata" className="h-full w-full object-cover" />
+          )}
+          {asset.kind === 'audio' && <span className="text-2xl">🎵</span>}
+        </div>
+        <span className="truncate px-1.5 py-1 text-[11px] text-zinc-400">{asset.name}</span>
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onDelete()
+        }}
+        title="Remove asset"
+        className="absolute right-1 top-1 hidden rounded bg-black/70 px-1 text-[10px] text-zinc-300 group-hover:block hover:text-red-400"
+      >
+        ✕
+      </button>
+    </div>
   )
 }

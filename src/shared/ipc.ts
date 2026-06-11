@@ -20,6 +20,8 @@ import type {
   ShotInput,
   AppSettings,
   ComfyStatus,
+  ComfyOutput,
+  ComfyRun,
   ExportResult,
   ProjectMediaDirs,
 } from './types'
@@ -40,6 +42,7 @@ export const IpcChannels = {
   assets: {
     importDialog: 'assets:importDialog',
     list: 'assets:list',
+    delete: 'assets:delete',
   },
   folders: {
     list: 'folders:list',
@@ -68,6 +71,8 @@ export const IpcChannels = {
     status: 'comfy:status',
     linkShot: 'comfy:linkShot',
     pullLatest: 'comfy:pullLatest',
+    latestRun: 'comfy:latestRun',
+    captureOutput: 'comfy:captureOutput',
   },
   settings: {
     get: 'settings:get',
@@ -139,6 +144,8 @@ export interface StorylineApi {
     importDialog(folderId: string | null): Promise<Result<Asset[]>>
     /** All assets in the open project, newest first. */
     list(): Promise<Result<Asset[]>>
+    /** Delete an asset (file + row); blocked if used by a shot. */
+    delete(assetId: string): Promise<Result<void>>
   }
   folders: {
     /** All asset folders in the open project. */
@@ -185,6 +192,10 @@ export interface StorylineApi {
     linkShot(shotId: string): Promise<Result<Shot>>
     /** Pull ComfyUI's latest output and attach it to the shot as its Output take. */
     pullLatest(shotId: string): Promise<Result<Take>>
+    /** The most recent ComfyUI run + all its output files (for the capture strip). */
+    latestRun(): Promise<Result<ComfyRun | null>>
+    /** Download a specific ComfyUI output and attach it to the shot as a take. */
+    captureOutput(shotId: string, output: ComfyOutput): Promise<Result<Take>>
   }
   settings: {
     get(): Promise<Result<AppSettings>>

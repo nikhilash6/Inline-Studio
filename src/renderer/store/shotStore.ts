@@ -4,7 +4,7 @@
  * manages the full grids. Work happens in main via window.storyline.shots / .comfy.
  */
 import { create } from 'zustand'
-import type { Shot, Take, ShotInput } from '@shared/types'
+import type { Shot, Take, ShotInput, ComfyOutput } from '@shared/types'
 import { ipcErrorMessage } from '../lib/ipcError'
 
 interface ShotState {
@@ -34,6 +34,7 @@ interface ShotState {
   remove: (id: string) => Promise<void>
   linkShot: (id: string) => Promise<Shot | null>
   pullResult: (id: string) => Promise<void>
+  captureOutput: (shotId: string, output: ComfyOutput) => Promise<void>
   exportShots: () => Promise<void>
   select: (id: string | null) => void
   reset: () => void
@@ -214,6 +215,20 @@ export const useShotStore = create<ShotState>((set, get) => ({
       }))
     } catch (e) {
       set({ error: ipcErrorMessage(e), busyId: null })
+    }
+  },
+
+  captureOutput: async (shotId, output) => {
+    try {
+      const res = await window.storyline.comfy.captureOutput(shotId, output)
+      if (!res.ok) return set({ error: res.error })
+      const take = res.value
+      set((s) => ({
+        takesByShot: { ...s.takesByShot, [shotId]: [take, ...(s.takesByShot[shotId] ?? [])] },
+        shots: s.shots.map((sh) => (sh.id === shotId ? { ...sh, heroTakeId: take.id } : sh)),
+      }))
+    } catch (e) {
+      set({ error: ipcErrorMessage(e) })
     }
   },
 

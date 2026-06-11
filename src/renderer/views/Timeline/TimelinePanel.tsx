@@ -3,9 +3,10 @@ import { mediaUrl } from '@shared/media'
 import type { Shot } from '@shared/types'
 import { useShotStore } from '../../store/shotStore'
 import { useAssetStore } from '../../store/assetStore'
+import { useUiStore } from '../../store/uiStore'
 import { ASSET_DND_TYPE, getAssetDragIds } from '../../lib/dnd'
 
-const STACK_MAX = 4
+const STACK_MAX = 3
 
 interface Thumb {
   key: string
@@ -99,7 +100,7 @@ export function TimelinePanel(): React.JSX.Element {
             </p>
           </div>
         ) : (
-          <div className="flex h-full w-full gap-2 overflow-x-auto p-3">
+          <div className="flex h-full w-full items-start gap-2 overflow-x-auto p-3">
             {shots.map((shot) => (
               <ShotCard
                 key={shot.id}
@@ -134,8 +135,22 @@ function ShotCard({
   const takes = useShotStore((s) => s.takesByShot[shot.id])
   const addInputs = useShotStore((s) => s.addInputs)
   const remove = useShotStore((s) => s.remove)
+  const linkShot = useShotStore((s) => s.linkShot)
+  const busy = useShotStore((s) => s.busyId === shot.id)
+  const setMode = useUiStore((s) => s.setMode)
+  const setLinkedWorkflow = useUiStore((s) => s.setLinkedWorkflow)
+  const setActiveShot = useUiStore((s) => s.setActiveShot)
   const assets = useAssetStore((s) => s.assets)
   const [over, setOver] = useState(false)
+  const linked = !!shot.comfyWorkflowName
+
+  const onLink = async (e: React.MouseEvent): Promise<void> => {
+    e.stopPropagation()
+    const result = await linkShot(shot.id)
+    setLinkedWorkflow(result?.comfyWorkflowName ?? shot.comfyWorkflowName)
+    setActiveShot(shot.id)
+    setMode('generate')
+  }
 
   const inputThumbs: Thumb[] = (inputs ?? [])
     .map((i) => assets.find((a) => a.id === i.assetId))
@@ -176,7 +191,7 @@ function ShotCard({
       onDragLeave={() => setOver(false)}
       onDrop={onDrop}
       onClick={onSelect}
-      className={`group flex w-48 shrink-0 cursor-pointer flex-col gap-1.5 rounded-lg border p-2 ${
+      className={`group flex w-56 shrink-0 cursor-pointer flex-col gap-1.5 rounded-lg border p-2 ${
         over ? 'border-accent ring-1 ring-accent' : selected ? 'border-accent' : 'border-border'
       } bg-panel`}
     >
@@ -197,40 +212,54 @@ function ShotCard({
         </button>
       </div>
 
-      <Stack label="In" thumbs={inputThumbs} />
-      <Stack label="Out" thumbs={outputThumbs} emptyText="no output" />
+      <Section title="Inputs" thumbs={inputThumbs} />
+      <div className="border-t border-border" />
+      <Section title="Outputs" thumbs={outputThumbs} emptyText="no output yet" />
+
+      <button
+        onClick={(e) => void onLink(e)}
+        disabled={busy}
+        className="mt-auto rounded border border-border py-1 text-[10px] font-medium text-zinc-200 hover:bg-surface disabled:opacity-40"
+      >
+        {busy ? '…' : linked ? 'Open Workflow' : 'Link Workflow'}
+      </button>
     </div>
   )
 }
 
-function Stack({
-  label,
+function Section({
+  title,
   thumbs,
   emptyText,
 }: {
-  label: string
+  title: string
   thumbs: Thumb[]
   emptyText?: string
 }): React.JSX.Element {
   const shown = thumbs.slice(0, STACK_MAX)
   const overflow = thumbs.length - shown.length
   return (
-    <div className="flex items-center gap-1">
-      <span className="w-6 shrink-0 text-[9px] uppercase tracking-wide text-zinc-500">{label}</span>
-      {thumbs.length === 0 ? (
-        <span className="text-[10px] text-zinc-600">{emptyText ?? 'empty'}</span>
-      ) : (
-        <div className="flex items-center gap-1">
-          {shown.map((t) => (
-            <Tile key={t.key} thumb={t} />
-          ))}
-          {overflow > 0 && (
-            <span className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface text-[10px] text-zinc-400">
-              +{overflow}
-            </span>
-          )}
-        </div>
-      )}
+    <div className="flex flex-col gap-1">
+      <span className="text-[9px] font-medium uppercase tracking-wide text-zinc-500">
+        {title} {thumbs.length > 0 && <span className="text-zinc-600">· {thumbs.length}</span>}
+      </span>
+      {/* Fixed one-row height so every card is the same height regardless of count. */}
+      <div className="flex h-12 items-center gap-1">
+        {thumbs.length === 0 ? (
+          <span className="text-[10px] text-zinc-600">{emptyText ?? 'empty'}</span>
+        ) : (
+          <>
+            {shown.map((t) => (
+              <Tile key={t.key} thumb={t} />
+            ))}
+            {overflow > 0 && (
+              <span className="flex h-12 w-12 items-center justify-center rounded border border-border bg-surface text-[10px] text-zinc-400">
+                +{overflow}
+              </span>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -238,7 +267,7 @@ function Stack({
 function Tile({ thumb }: { thumb: Thumb }): React.JSX.Element {
   return (
     <div
-      className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded border bg-black/40 ${
+      className={`flex h-12 w-12 items-center justify-center overflow-hidden rounded border bg-black/40 ${
         thumb.hero ? 'border-accent ring-1 ring-accent' : 'border-border'
       }`}
     >

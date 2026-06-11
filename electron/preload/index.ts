@@ -11,6 +11,7 @@ import {
   type CreateFolderInput,
   type MoodboardItemPatch,
 } from '@shared/ipc'
+import type { ComfyOutput } from '@shared/types'
 
 const api: StorylineApi = {
   project: {
@@ -28,6 +29,7 @@ const api: StorylineApi = {
     importDialog: (folderId: string | null) =>
       ipcRenderer.invoke(IpcChannels.assets.importDialog, folderId),
     list: () => ipcRenderer.invoke(IpcChannels.assets.list),
+    delete: (assetId: string) => ipcRenderer.invoke(IpcChannels.assets.delete, assetId),
   },
   folders: {
     list: () => ipcRenderer.invoke(IpcChannels.folders.list),
@@ -60,6 +62,9 @@ const api: StorylineApi = {
     status: () => ipcRenderer.invoke(IpcChannels.comfy.status),
     linkShot: (shotId: string) => ipcRenderer.invoke(IpcChannels.comfy.linkShot, shotId),
     pullLatest: (shotId: string) => ipcRenderer.invoke(IpcChannels.comfy.pullLatest, shotId),
+    latestRun: () => ipcRenderer.invoke(IpcChannels.comfy.latestRun),
+    captureOutput: (shotId: string, output: ComfyOutput) =>
+      ipcRenderer.invoke(IpcChannels.comfy.captureOutput, shotId, output),
   },
   settings: {
     get: () => ipcRenderer.invoke(IpcChannels.settings.get),

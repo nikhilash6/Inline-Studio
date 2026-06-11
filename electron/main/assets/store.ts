@@ -5,7 +5,7 @@
  */
 import { dialog } from 'electron'
 import { join, extname, basename } from 'node:path'
-import { copyFileSync } from 'node:fs'
+import { copyFileSync, existsSync, unlinkSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Asset, AssetKind } from '@shared/types'
 import { getDb, getOpenProjectFolder } from '../db'
@@ -123,4 +123,40 @@ export async function importViaDialog(folderId: string | null): Promise<Asset[]>
 export function listAssets(): Asset[] {
   const rows = getDb().prepare('SELECT * FROM assets ORDER BY created_at DESC').all() as AssetRow[]
   return rows.map(rowToAsset)
+}
+
+/**
+ * Delete a library asset: removes it from any moodboard items, deletes the row and
+ * the file. Blocked if it's used as a shot input (a shot must keep ≥1 input) —
+ * remove it from those shots first.
+ */
+export function deleteAsset(assetId: string): void {
+  const db = getDb()
+  const used = db
+    .prepare('SELECT COUNT(*) AS n FROM shot_inputs WHERE asset_id = ?')
+    .get(assetId) as { n: number }
+  if (used.n > 0) {
+    throw new Error(
+      `This asset is used by ${used.n} shot${used.n === 1 ? '' : 's'} — remove it from those shots first.`,
+    )
+  }
+  const row = db.prepare('SELECT file_path FROM assets WHERE id = ?').get(assetId) as
+    | { file_path: string }
+    | undefined
+  const folder = getOpenProjectFolder()
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM moodboard_items WHERE asset_id = ?').run(assetId)
+    db.prepare('DELETE FROM assets WHERE id = ?').run(assetId)
+  })
+  tx()
+  if (row && folder) {
+    const abs = join(folder, row.file_path)
+    if (existsSync(abs)) {
+      try {
+        unlinkSync(abs)
+      } catch {
+        // ignore
+      }
+    }
+  }
 }

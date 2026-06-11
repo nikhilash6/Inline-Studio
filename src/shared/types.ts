@@ -194,6 +194,22 @@ export interface ComfyStatus {
   url: string
 }
 
+/** A single output file produced by a ComfyUI run. */
+export interface ComfyOutput {
+  filename: string
+  subfolder: string
+  type: string
+  kind: AssetKind
+  /** A `${comfyUrl}/view?...` URL for displaying the output. */
+  url: string
+}
+
+/** The most recent ComfyUI run and its output files. */
+export interface ComfyRun {
+  promptId: string
+  outputs: ComfyOutput[]
+}
+
 /** Absolute media directories of the open project, for sharing with ComfyUI. */
 export interface ProjectMediaDirs {
   /** Where Storyline keeps imported inputs — point ComfyUI's --input-directory here. */

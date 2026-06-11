@@ -56,11 +56,16 @@ export function Workspace({ project }: { project: Project }): React.JSX.Element 
       </header>
 
       <main className="min-h-0 flex-1">
-        {mode === 'generate' ? (
+        {/* Generate stays mounted (just hidden) so ComfyUI doesn't reload and
+            restore its previous tab each time — which raced our 'open workflow'
+            and selected the wrong shot. */}
+        <div className={mode === 'generate' ? 'h-full' : 'hidden'}>
           <GeneratePanel />
-        ) : mode === 'moodboard' ? (
-          <MoodboardPanel />
-        ) : (
+        </div>
+
+        {mode === 'moodboard' && <MoodboardPanel />}
+
+        {mode === 'edit' && (
           <PanelGroup direction="vertical" autoSaveId="storyline:workspace:v">
             <Panel defaultSize={62} minSize={30}>
               <PanelGroup direction="horizontal" autoSaveId="storyline:workspace:h">

@@ -7,7 +7,7 @@
 import { join, extname } from 'node:path'
 import { writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import type { Take, ComfyStatus, AssetKind, Shot } from '@shared/types'
+import type { Take, ComfyStatus, AssetKind, Shot, ComfyOutput, ComfyRun } from '@shared/types'
 import { getSettings } from '../settings/store'
 import { getOpenProjectFolder } from '../db'
 import { addTake, getShotById, linkWorkflow, shotInputFileNames } from '../shots/store'
@@ -123,48 +123,42 @@ interface HistoryEntry {
   outputs: Record<string, Record<string, OutputFile[]>>
 }
 
-/** Find the first downloadable file across a history entry's node outputs. */
-function findOutputFile(outputs: HistoryEntry['outputs']): OutputFile | null {
+/** All downloadable files across a history entry's node outputs, in node order. */
+function collectOutputs(outputs: HistoryEntry['outputs']): OutputFile[] {
+  const files: OutputFile[] = []
   for (const node of Object.values(outputs)) {
     for (const value of Object.values(node)) {
-      if (Array.isArray(value) && value.length > 0 && typeof value[0]?.filename === 'string') {
-        return value[0]
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item && typeof item.filename === 'string') files.push(item)
+        }
       }
     }
   }
-  return null
+  return files
 }
 
-/**
- * Pull the most recent ComfyUI output and attach it to the shot as a take.
- * Heuristic: the last entry in /history is the latest run.
- */
-export async function pullLatestToShot(shotId: string): Promise<Take> {
-  const url = baseUrl()
-  const res = await fetch(`${url}/history`)
-  if (!res.ok) throw new Error(`Could not read ComfyUI history (${res.status}). Is it running?`)
-  const history = (await res.json()) as Record<string, HistoryEntry>
-  const ids = Object.keys(history)
-  if (ids.length === 0) {
-    throw new Error('No ComfyUI output found yet — generate something in ComfyUI first.')
-  }
-  const promptId = ids[ids.length - 1]
-  const file = findOutputFile(history[promptId].outputs)
-  if (!file) throw new Error('The latest ComfyUI run produced no downloadable output.')
-
-  const viewUrl =
-    `${url}/view?filename=${encodeURIComponent(file.filename)}` +
+function viewUrl(file: OutputFile): string {
+  return (
+    `${baseUrl()}/view?filename=${encodeURIComponent(file.filename)}` +
     `&subfolder=${encodeURIComponent(file.subfolder ?? '')}` +
     `&type=${encodeURIComponent(file.type ?? 'output')}`
-  const bin = await fetch(viewUrl)
-  if (!bin.ok) throw new Error(`Could not download ComfyUI output (${bin.status}).`)
+  )
+}
 
+/** Download a ComfyUI output file into the project's takes/ and attach it as a take. */
+async function saveOutputAsTake(
+  shotId: string,
+  file: OutputFile,
+  promptId: string | null,
+): Promise<Take> {
+  const bin = await fetch(viewUrl(file))
+  if (!bin.ok) throw new Error(`Could not download ComfyUI output (${bin.status}).`)
   const folder = getOpenProjectFolder()
   if (!folder) throw new Error('No project is open.')
   const ext = extname(file.filename) || '.png'
   const relPath = `takes/${randomUUID()}${ext}`
   writeFileSync(join(folder, relPath), Buffer.from(await bin.arrayBuffer()))
-
   return addTake({
     shotId,
     filePath: relPath,
@@ -172,4 +166,49 @@ export async function pullLatestToShot(shotId: string): Promise<Take> {
     comfyPromptId: promptId,
     params: {},
   })
+}
+
+/**
+ * Pull the most recent ComfyUI output and attach it to the shot as a take.
+ * Heuristic: the last entry in /history is the latest run.
+ */
+export async function pullLatestToShot(shotId: string): Promise<Take> {
+  const res = await fetch(`${baseUrl()}/history`)
+  if (!res.ok) throw new Error(`Could not read ComfyUI history (${res.status}). Is it running?`)
+  const history = (await res.json()) as Record<string, HistoryEntry>
+  const ids = Object.keys(history)
+  if (ids.length === 0) {
+    throw new Error('No ComfyUI output found yet — generate something in ComfyUI first.')
+  }
+  const promptId = ids[ids.length - 1]
+  const file = collectOutputs(history[promptId].outputs)[0]
+  if (!file) throw new Error('The latest ComfyUI run produced no downloadable output.')
+  return saveOutputAsTake(shotId, file, promptId)
+}
+
+/** The most recent ComfyUI run and all its output files (for the capture strip). */
+export async function latestRun(): Promise<ComfyRun | null> {
+  const res = await fetch(`${baseUrl()}/history`)
+  if (!res.ok) return null
+  const history = (await res.json()) as Record<string, HistoryEntry>
+  const ids = Object.keys(history)
+  if (ids.length === 0) return null
+  const promptId = ids[ids.length - 1]
+  const outputs: ComfyOutput[] = collectOutputs(history[promptId].outputs).map((f) => ({
+    filename: f.filename,
+    subfolder: f.subfolder ?? '',
+    type: f.type ?? 'output',
+    kind: kindForExt(extname(f.filename)),
+    url: viewUrl(f),
+  }))
+  return { promptId, outputs }
+}
+
+/** Download a specific ComfyUI output (from the capture strip) into the shot. */
+export async function captureOutput(shotId: string, output: ComfyOutput): Promise<Take> {
+  return saveOutputAsTake(
+    shotId,
+    { filename: output.filename, subfolder: output.subfolder, type: output.type },
+    null,
+  )
 }
