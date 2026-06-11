@@ -183,3 +183,13 @@ export interface ComfyStatus {
   running: boolean
   url: string
 }
+
+/** Summary of an "export shots to folder" run. */
+export interface ExportResult {
+  /** Absolute directory the files were written to. */
+  dir: string
+  /** Count of shot outputs exported. */
+  exported: number
+  /** Names of shots skipped because they had no Output yet. */
+  skipped: string[]
+}

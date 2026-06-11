@@ -11,7 +11,8 @@ import { useUiStore } from '../../store/uiStore'
  * adds shots; drag a card to reorder; click to preview; double-click the name to rename.
  */
 export function TimelinePanel(): React.JSX.Element {
-  const { shots, selectedId, error, load, importAsShots, reorder, select } = useShotStore()
+  const { shots, selectedId, error, notice, load, importAsShots, reorder, select, exportShots } =
+    useShotStore()
   const selectAsset = useAssetStore((s) => s.select)
   const dragId = useRef<string | null>(null)
 
@@ -40,15 +41,25 @@ export function TimelinePanel(): React.JSX.Element {
         <span className="text-xs font-medium uppercase tracking-wide text-zinc-400">
           Shots {shots.length > 0 && <span className="text-zinc-600">· {shots.length}</span>}
         </span>
-        <button
-          onClick={() => void importAsShots()}
-          className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white"
-        >
-          Import as shots
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => void exportShots()}
+            disabled={shots.length === 0}
+            className="rounded-md border border-border px-2.5 py-1 text-xs text-zinc-300 hover:bg-panel disabled:opacity-40"
+          >
+            Export
+          </button>
+          <button
+            onClick={() => void importAsShots()}
+            className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white"
+          >
+            Import as shots
+          </button>
+        </div>
       </div>
 
       {error && <p className="px-3 py-1 text-xs text-red-400">{error}</p>}
+      {notice && <p className="px-3 py-1 text-xs text-green-400">{notice}</p>}
 
       {shots.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-1 text-center">

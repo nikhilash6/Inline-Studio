@@ -52,6 +52,9 @@ const api: StorylineApi = {
     get: () => ipcRenderer.invoke(IpcChannels.settings.get),
     setComfyUrl: (url: string) => ipcRenderer.invoke(IpcChannels.settings.setComfyUrl, url),
   },
+  export: {
+    exportShots: () => ipcRenderer.invoke(IpcChannels.export.exportShots),
+  },
   moodboard: {
     list: () => ipcRenderer.invoke(IpcChannels.moodboard.list),
     addAsset: (assetId: string, x: number, y: number) =>

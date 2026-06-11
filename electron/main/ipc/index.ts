@@ -6,6 +6,7 @@ import { registerMoodboardHandlers } from './moodboard'
 import { registerShotHandlers } from './shots'
 import { registerComfyHandlers } from './comfy'
 import { registerSettingsHandlers } from './settings'
+import { registerExportHandlers } from './export'
 
 export function registerIpcHandlers(): void {
   registerProjectHandlers()
@@ -15,4 +16,5 @@ export function registerIpcHandlers(): void {
   registerShotHandlers()
   registerComfyHandlers()
   registerSettingsHandlers()
+  registerExportHandlers()
 }

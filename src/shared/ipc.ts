@@ -19,6 +19,7 @@ import type {
   Take,
   AppSettings,
   ComfyStatus,
+  ExportResult,
 } from './types'
 import type { Result } from './result'
 
@@ -59,6 +60,9 @@ export const IpcChannels = {
   settings: {
     get: 'settings:get',
     setComfyUrl: 'settings:setComfyUrl',
+  },
+  export: {
+    exportShots: 'export:exportShots',
   },
   moodboard: {
     list: 'moodboard:list',
@@ -156,6 +160,10 @@ export interface StorylineApi {
   settings: {
     get(): Promise<Result<AppSettings>>
     setComfyUrl(url: string): Promise<Result<AppSettings>>
+  }
+  export: {
+    /** Pick a folder and write each shot's Output in order; null if cancelled. */
+    exportShots(): Promise<Result<ExportResult | null>>
   }
   moodboard: {
     /** The full board (items + connectors) for the open project. */

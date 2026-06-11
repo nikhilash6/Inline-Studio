@@ -15,6 +15,8 @@ interface ShotState {
   /** Shot id currently mid-action (send/pull), for in-card spinners. */
   busyId: string | null
   error: string | null
+  /** Transient status message (e.g. export summary). */
+  notice: string | null
 
   load: () => Promise<void>
   importAsShots: () => Promise<void>
@@ -24,6 +26,7 @@ interface ShotState {
   remove: (id: string) => Promise<void>
   sendToComfy: (id: string) => Promise<void>
   pullResult: (id: string) => Promise<void>
+  exportShots: () => Promise<void>
   select: (id: string | null) => void
   reset: () => void
 }
@@ -41,6 +44,7 @@ export const useShotStore = create<ShotState>((set) => ({
   loading: false,
   busyId: null,
   error: null,
+  notice: null,
 
   load: async () => {
     set({ loading: true, error: null })
@@ -149,6 +153,21 @@ export const useShotStore = create<ShotState>((set) => ({
     }
   },
 
+  exportShots: async () => {
+    set({ error: null, notice: null })
+    try {
+      const res = await window.storyline.export.exportShots()
+      if (!res.ok) return set({ error: res.error })
+      if (res.value === null) return // cancelled
+      const { exported, skipped, dir } = res.value
+      const skip = skipped.length > 0 ? `, ${skipped.length} skipped (no output)` : ''
+      set({ notice: `Exported ${exported} shot${exported === 1 ? '' : 's'}${skip} → ${dir}` })
+    } catch (e) {
+      set({ error: ipcErrorMessage(e) })
+    }
+  },
+
   select: (id) => set({ selectedId: id }),
-  reset: () => set({ shots: [], outputs: {}, selectedId: null, busyId: null, error: null }),
+  reset: () =>
+    set({ shots: [], outputs: {}, selectedId: null, busyId: null, error: null, notice: null }),
 }))
