@@ -12,6 +12,7 @@ export function NodeFrame({
   minWidth = 80,
   minHeight = 40,
   padded = true,
+  transparent = false,
   children,
 }: {
   id: string
@@ -19,10 +20,16 @@ export function NodeFrame({
   minWidth?: number
   minHeight?: number
   padded?: boolean
+  /** Drop the surface box (border + background) — used by text, which floats bare on the canvas. */
+  transparent?: boolean
   children: ReactNode
 }): React.JSX.Element {
   const updateItem = useMoodboardStore((s) => s.updateItem)
   const deleteItem = useMoodboardStore((s) => s.deleteItem)
+
+  const box = transparent
+    ? `bg-transparent ${selected ? 'border border-dashed border-accent/60' : 'border border-transparent'}`
+    : `border bg-surface ${selected ? 'border-accent' : 'border-border'}`
 
   return (
     <>
@@ -34,11 +41,7 @@ export function NodeFrame({
         handleClassName="!bg-accent !border-white"
         onResizeEnd={(_e, p) => void updateItem(id, { width: p.width, height: p.height })}
       />
-      <div
-        className={`h-full w-full overflow-hidden rounded-md border bg-surface ${
-          selected ? 'border-accent' : 'border-border'
-        } ${padded ? 'p-1' : ''}`}
-      >
+      <div className={`h-full w-full overflow-hidden rounded-md ${box} ${padded ? 'p-1' : ''}`}>
         {children}
       </div>
       {selected && (

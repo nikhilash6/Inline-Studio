@@ -6,14 +6,16 @@ import { useAssetStore } from '../../store/assetStore'
 import { useMoodboardStore } from '../../store/moodboardStore'
 import { useUiStore } from '../../store/uiStore'
 import { LibraryPanel } from '../Library/LibraryPanel'
+import { EditIcon, FolderIcon, HistoryIcon, ImageIcon, WorkflowIcon } from '../../components/icons'
 
 type Tab = 'assets' | 'timeline'
 type SortKey = 'updated' | 'name'
 
-const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'assets', label: 'Assets', icon: '▦' },
-  { key: 'timeline', label: 'Timeline', icon: '☰' },
-]
+const TABS: { key: Tab; label: string; Icon: (p: { className?: string }) => React.JSX.Element }[] =
+  [
+    { key: 'assets', label: 'Assets', Icon: ImageIcon },
+    { key: 'timeline', label: 'Timeline', Icon: HistoryIcon },
+  ]
 
 /**
  * Collapsible left rail for the canvas. Assets reuses the full library (browse /
@@ -43,11 +45,11 @@ export function SideMenu(): React.JSX.Element {
               setOpen(true)
             }}
             title={t.label}
-            className={`flex h-9 w-9 items-center justify-center rounded text-base ${
+            className={`flex h-9 w-9 items-center justify-center rounded ${
               tab === t.key ? 'bg-accent text-white' : 'text-zinc-400 hover:bg-surface'
             }`}
           >
-            {t.icon}
+            <t.Icon className="h-5 w-5" />
           </button>
         ))}
       </div>
@@ -67,7 +69,7 @@ export function SideMenu(): React.JSX.Element {
                 tab === t.key ? 'bg-accent text-white' : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              <span>{t.icon}</span>
+              <t.Icon className="h-3.5 w-3.5" />
               {t.label}
             </button>
           ))}
@@ -177,18 +179,22 @@ function FrameFolder({
           title="Toggle"
         >
           <span className="text-zinc-500">{open ? '▾' : '▸'}</span>
-          <FolderIcon />
+          <FolderIcon className="h-3 w-3 shrink-0 text-zinc-500" />
           <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-200">
             Frame {frame.name}
           </span>
         </button>
-        {frame.comfyWorkflowName && <span title="Linked workflow">🔗</span>}
+        {frame.comfyWorkflowName && (
+          <span title="Linked workflow" className="flex shrink-0 text-zinc-400">
+            <WorkflowIcon className="h-3.5 w-3.5" />
+          </span>
+        )}
         <button
           onClick={() => openInspector(frame.id)}
           title="Edit frame"
-          className="px-1 text-[11px] text-zinc-400 hover:text-white"
+          className="px-1 text-zinc-400 hover:text-white"
         >
-          ✎
+          <EditIcon className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={onDelete}
@@ -263,7 +269,7 @@ function Folder({
         className="flex items-center gap-1 py-0.5 text-left text-[10px] uppercase tracking-wide text-zinc-500 hover:text-zinc-300"
       >
         <span>{open ? '▾' : '▸'}</span>
-        <FolderIcon />
+        <FolderIcon className="h-3 w-3 shrink-0 text-zinc-500" />
         {label}
         <span className="text-zinc-600">({count})</span>
       </button>
@@ -304,12 +310,4 @@ function FileRow({
 
 function Empty({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <span className="py-0.5 text-[10px] text-zinc-600">{children}</span>
-}
-
-function FolderIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3 shrink-0 text-zinc-500">
-      <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
-    </svg>
-  )
 }

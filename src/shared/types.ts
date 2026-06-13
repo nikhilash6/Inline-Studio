@@ -115,6 +115,8 @@ export interface TextItemData {
   underline: boolean
   color: string
   align: 'left' | 'center' | 'right'
+  /** Optional http(s) URL — renders the text as a clickable link. */
+  link?: string
 }
 
 /** Type-specific payload for a moodboard item (currently just text styling). */

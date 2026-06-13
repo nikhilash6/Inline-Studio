@@ -3,6 +3,7 @@ import { mediaUrl } from '@shared/media'
 import type { Asset, AssetFolder } from '@shared/types'
 import { useAssetStore, folderPath } from '../../store/assetStore'
 import { setAssetDragPayload } from '../../lib/dnd'
+import { CreateNewFolderIcon, DownloadIcon, FolderIcon } from '../../components/icons'
 
 /** Left panel: folder navigation + import + a grid of folders and media. */
 export function LibraryPanel(): React.JSX.Element {
@@ -50,16 +51,20 @@ export function LibraryPanel(): React.JSX.Element {
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setNewFolderName('')}
-            className="rounded-md border border-border px-2 py-1 text-xs text-zinc-300 hover:bg-surface"
+            title="New folder"
+            aria-label="New folder"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-zinc-300 hover:bg-surface"
           >
-            New Folder
+            <CreateNewFolderIcon className="h-4 w-4" />
           </button>
           <button
             onClick={() => void importAssets()}
             disabled={loading}
-            className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white disabled:opacity-40"
+            title="Import media"
+            aria-label="Import media"
+            className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-white disabled:opacity-40"
           >
-            Import
+            <DownloadIcon className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -163,7 +168,7 @@ function FolderTile({
         title={folder.name}
         className="flex w-full flex-col items-center gap-1 rounded-md border border-border bg-surface px-2 py-3 hover:border-zinc-600"
       >
-        <span className="text-2xl leading-none">📁</span>
+        <FolderIcon className="h-8 w-8 text-zinc-400" />
         <span className="w-full truncate text-center text-[11px] text-zinc-300">{folder.name}</span>
       </button>
       <button
