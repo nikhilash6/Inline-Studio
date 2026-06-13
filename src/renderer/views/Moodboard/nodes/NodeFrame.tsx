@@ -6,6 +6,12 @@ import { useMoodboardStore } from '../../../store/moodboardStore'
  * Shared chrome for every moodboard node: a fill container, a resize handle +
  * delete button when selected. Resize persists on end; delete removes the item.
  */
+/** New dimensions reported by the resize handle. */
+export interface ResizeSize {
+  width: number
+  height: number
+}
+
 export function NodeFrame({
   id,
   selected,
@@ -13,6 +19,9 @@ export function NodeFrame({
   minHeight = 40,
   padded = true,
   transparent = false,
+  onResizeStart,
+  onResize,
+  onResizeEnd,
   children,
 }: {
   id: string
@@ -22,6 +31,10 @@ export function NodeFrame({
   padded?: boolean
   /** Drop the surface box (border + background) — used by text, which floats bare on the canvas. */
   transparent?: boolean
+  /** Resize hooks. When `onResizeEnd` is given it replaces the default width/height persist. */
+  onResizeStart?: (size: ResizeSize) => void
+  onResize?: (size: ResizeSize) => void
+  onResizeEnd?: (size: ResizeSize) => void
   children: ReactNode
 }): React.JSX.Element {
   const updateItem = useMoodboardStore((s) => s.updateItem)
@@ -39,7 +52,13 @@ export function NodeFrame({
         minHeight={minHeight}
         lineClassName="!border-accent"
         handleClassName="!bg-accent !border-white"
-        onResizeEnd={(_e, p) => void updateItem(id, { width: p.width, height: p.height })}
+        onResizeStart={(_e, p) => onResizeStart?.({ width: p.width, height: p.height })}
+        onResize={(_e, p) => onResize?.({ width: p.width, height: p.height })}
+        onResizeEnd={(_e, p) => {
+          const size = { width: p.width, height: p.height }
+          if (onResizeEnd) onResizeEnd(size)
+          else void updateItem(id, size)
+        }}
       />
       <div className={`h-full w-full overflow-hidden rounded-md ${box} ${padded ? 'p-1' : ''}`}>
         {children}

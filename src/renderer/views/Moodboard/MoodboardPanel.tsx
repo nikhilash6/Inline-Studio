@@ -3,7 +3,6 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Background,
-  Controls,
   ConnectionMode,
   useNodesState,
   useEdgesState,
@@ -279,7 +278,6 @@ function Board(): React.JSX.Element {
           fitView
         >
           <Background gap={22} size={2.5} color="#525a66" />
-          <Controls showInteractive={false} />
         </ReactFlow>
 
         <CanvasToolbar

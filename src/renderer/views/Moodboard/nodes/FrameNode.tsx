@@ -1,14 +1,20 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { mediaUrl } from '@shared/media'
 import { useFrameStore } from '../../../store/frameStore'
 import { useAssetStore } from '../../../store/assetStore'
+import { useMoodboardStore } from '../../../store/moodboardStore'
 import { useUiStore } from '../../../store/uiStore'
 import { NodeFrame } from './NodeFrame'
 
 interface FrameNodeData extends Record<string, unknown> {
   frameId: string
 }
+
+// Bounds for the media body when fitting to a media's aspect ratio — keeps very
+// wide/tall inputs from collapsing or ballooning the node.
+const MIN_BODY = 160
+const MAX_BODY = 480
 
 /** Small, both-source-and-target (loose mode) handle for purely-visual frame links. */
 function VisualHandle({ id, position }: { id: string; position: Position }): React.JSX.Element {
@@ -37,10 +43,19 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
   const uploadInputs = useFrameStore((s) => s.uploadInputs)
   const reorderInputs = useFrameStore((s) => s.reorderInputs)
   const assets = useAssetStore((s) => s.assets)
+  const item = useMoodboardStore((s) => s.items.find((it) => it.id === id))
+  const updateItem = useMoodboardStore((s) => s.updateItem)
   const setMode = useUiStore((s) => s.setMode)
   const setLinkedWorkflow = useUiStore((s) => s.setLinkedWorkflow)
   const setActiveFrame = useUiStore((s) => s.setActiveFrame)
   const [idx, setIdx] = useState(0)
+  // Aspect ratio of the current media; drives the node height so the image fills
+  // the body with no black letterboxing.
+  const [aspect, setAspect] = useState<number | null>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  // Signature of the last applied fit (aspect + width); guards against re-firing
+  // the height update on every render, which would loop and freeze the canvas.
+  const lastFit = useRef<string>('')
 
   const thumbs = inputs
     .map((i) => assets.find((a) => a.id === i.assetId))
@@ -49,6 +64,32 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
   const safeIdx = count ? Math.min(idx, count - 1) : 0
   const cur = count ? thumbs[safeIdx] : undefined
   const linked = !!frame?.comfyWorkflowName
+
+  // Fit the node height to the media's aspect ratio at the current width, so the
+  // body shows the image edge-to-edge with no black bars. The `lastFit` guard makes
+  // this fire at most once per (aspect, width) pair — so the resulting height change
+  // (which re-renders this node) can never feed back into another resize.
+  const itemWidth = item?.width
+  const itemHeight = item?.height
+  useLayoutEffect(() => {
+    const body = bodyRef.current
+    if (!aspect || !body || itemHeight == null || itemWidth == null) return
+    const sig = `${aspect.toFixed(4)}:${itemWidth}`
+    if (lastFit.current === sig) return
+    const width = body.clientWidth
+    if (!width) return
+    lastFit.current = sig
+    const targetBody = Math.max(MIN_BODY, Math.min(MAX_BODY, width / aspect))
+    const delta = targetBody - body.clientHeight
+    if (Math.abs(delta) < 1) return
+    void updateItem(id, { height: Math.round(itemHeight + delta) })
+  }, [aspect, itemWidth, itemHeight, id, updateItem])
+
+  // Drop the aspect lock when the visible input isn't an image/video (audio or none).
+  const curKind = cur?.kind
+  useLayoutEffect(() => {
+    if (curKind !== 'image' && curKind !== 'video') setAspect(null)
+  }, [curKind])
 
   const onLink = async (): Promise<void> => {
     if (!frame) return
@@ -94,14 +135,21 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
             </span>
           </div>
 
-          <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
+          <div
+            ref={bodyRef}
+            className="relative flex flex-1 items-center justify-center overflow-hidden bg-black"
+          >
             {cur ? (
               cur.kind === 'video' ? (
                 <video
                   src={mediaUrl(cur.filePath)}
                   muted
                   preload="metadata"
-                  className="max-h-full max-w-full object-contain"
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget
+                    if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight)
+                  }}
+                  className="h-full w-full object-cover"
                 />
               ) : cur.kind === 'audio' ? (
                 <span className="text-2xl">🎵</span>
@@ -109,7 +157,12 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
                 <img
                   src={mediaUrl(cur.filePath)}
                   alt=""
-                  className="max-h-full max-w-full object-contain"
+                  onLoad={(e) => {
+                    const img = e.currentTarget
+                    if (img.naturalWidth && img.naturalHeight)
+                      setAspect(img.naturalWidth / img.naturalHeight)
+                  }}
+                  className="h-full w-full object-cover"
                 />
               )
             ) : (

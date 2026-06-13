@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { TextItemData } from '@shared/types'
 
 /** Preset swatches for quick recolouring. First entry is the light-grey default. */
@@ -48,23 +49,8 @@ export function TextToolbar({
       className="nodrag nowheel absolute -top-11 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border bg-panel px-1.5 py-1 shadow-lg"
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      {/* Colour palette */}
-      <div className="flex items-center gap-0.5">
-        {PRESET_COLORS.map((c) => (
-          <button
-            key={c}
-            onClick={() => onChange({ color: c })}
-            title={c}
-            aria-label={`Colour ${c}`}
-            className={`h-4 w-4 rounded-full border ${
-              text.color.toLowerCase() === c.toLowerCase()
-                ? 'border-white ring-1 ring-accent'
-                : 'border-zinc-600'
-            }`}
-            style={{ backgroundColor: c }}
-          />
-        ))}
-      </div>
+      {/* Colour picker (dropdown) */}
+      <ColorDropdown color={text.color} onPick={(c) => onChange({ color: c })} />
 
       <Divider />
 
@@ -119,6 +105,66 @@ export function TextToolbar({
       >
         <LinkGlyph />
       </Toggle>
+    </div>
+  )
+}
+
+/** Swatch button that opens a popover of preset colours; closes on pick or outside click. */
+function ColorDropdown({
+  color,
+  onPick,
+}: {
+  color: string
+  onPick: (c: string) => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        title="Text colour"
+        aria-label="Text colour"
+        aria-expanded={open}
+        className="flex h-6 items-center gap-1 rounded px-1 text-zinc-300 hover:bg-surface"
+      >
+        <span
+          className="h-4 w-4 rounded-full border border-zinc-600"
+          style={{ backgroundColor: color }}
+        />
+        <span className="text-[8px] leading-none">▾</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-7 z-30 grid grid-cols-4 gap-1 rounded-md border border-border bg-panel p-1.5 shadow-lg">
+          {PRESET_COLORS.map((c) => (
+            <button
+              key={c}
+              onClick={() => {
+                onPick(c)
+                setOpen(false)
+              }}
+              title={c}
+              aria-label={`Colour ${c}`}
+              className={`h-5 w-5 rounded-full border ${
+                color.toLowerCase() === c.toLowerCase()
+                  ? 'border-white ring-1 ring-accent'
+                  : 'border-zinc-600'
+              }`}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
