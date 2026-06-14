@@ -24,13 +24,42 @@ const TABS: { key: Tab; label: string; Icon: (p: { className?: string }) => Reac
  * each frame as a folder of Inputs / Outputs / Workflow, with delete + sort. Node
  * creation lives in the floating canvas toolbar instead.
  */
+const MIN_PANEL_WIDTH = 200
+const MAX_PANEL_WIDTH = 600
+
 export function SideMenu(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('assets')
   const [open, setOpen] = useState(true)
+  const [width, setWidth] = useState(256)
+
+  // Drag the right separator to resize the expanded panel. Listeners live on the
+  // window so the drag keeps tracking even when the cursor outruns the handle.
+  const startResize = (e: React.MouseEvent): void => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = width
+    const onMove = (ev: MouseEvent): void => {
+      const next = Math.min(
+        MAX_PANEL_WIDTH,
+        Math.max(MIN_PANEL_WIDTH, startW + ev.clientX - startX),
+      )
+      setWidth(next)
+    }
+    const onUp = (): void => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
 
   if (!open) {
     return (
-      <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-border bg-panel py-2">
+      <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-border bg-surface py-2">
         <button
           onClick={() => setOpen(true)}
           title="Expand menu"
@@ -58,7 +87,10 @@ export function SideMenu(): React.JSX.Element {
   }
 
   return (
-    <div className="flex w-64 shrink-0 flex-col border-r border-border bg-panel">
+    <div
+      className="relative flex shrink-0 flex-col border-r border-border bg-surface"
+      style={{ width }}
+    >
       <div className="flex items-center justify-between border-b border-border px-1 py-1">
         <div className="flex gap-0.5">
           {TABS.map((t) => (
@@ -66,7 +98,7 @@ export function SideMenu(): React.JSX.Element {
               key={t.key}
               onClick={() => setTab(t.key)}
               title={t.label}
-              className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] ${
+              className={`flex items-center gap-1 rounded px-2 py-1 text-[13px] font-medium ${
                 tab === t.key ? 'bg-accent text-white' : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
@@ -89,6 +121,13 @@ export function SideMenu(): React.JSX.Element {
         {tab === 'assets' && <LibraryPanel />}
         {tab === 'timeline' && <TimelineTab />}
       </div>
+
+      {/* Drag separator on the right edge to resize the panel. */}
+      <div
+        onMouseDown={startResize}
+        title="Drag to resize"
+        className="absolute -right-0.5 top-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-accent/40"
+      />
     </div>
   )
 }

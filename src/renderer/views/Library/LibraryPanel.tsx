@@ -45,31 +45,32 @@ export function LibraryPanel(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full flex-col bg-panel">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-zinc-400">Assets</span>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setNewFolderName('')}
-            title="New Folder"
-            aria-label="New Folder"
-            className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:text-white"
-          >
-            <CreateNewFolderIcon className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => void importAssets()}
-            disabled={loading}
-            title="Import assets"
-            aria-label="Import assets"
-            className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:text-white disabled:opacity-40"
-          >
-            <PlusIcon className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      <Breadcrumb path={path} onNavigate={navigate} />
+    <div className="flex h-full flex-col bg-surface">
+      <Breadcrumb
+        path={path}
+        onNavigate={navigate}
+        actions={
+          <>
+            <button
+              onClick={() => setNewFolderName('')}
+              title="New Folder"
+              aria-label="New Folder"
+              className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:text-white"
+            >
+              <CreateNewFolderIcon className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => void importAssets()}
+              disabled={loading}
+              title="Import assets"
+              aria-label="Import assets"
+              className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:text-white disabled:opacity-40"
+            >
+              <PlusIcon className="h-4 w-4" />
+            </button>
+          </>
+        }
+      />
 
       {error && <p className="px-3 py-2 text-xs text-red-400">{error}</p>}
 
@@ -130,23 +131,28 @@ export function LibraryPanel(): React.JSX.Element {
 function Breadcrumb({
   path,
   onNavigate,
+  actions,
 }: {
   path: AssetFolder[]
   onNavigate: (id: string | null) => void
+  actions?: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-1.5 text-xs text-zinc-400">
-      <button onClick={() => onNavigate(null)} className="hover:text-zinc-200">
-        Library
-      </button>
-      {path.map((f) => (
-        <span key={f.id} className="flex items-center gap-1">
-          <span className="text-zinc-600">/</span>
-          <button onClick={() => onNavigate(f.id)} className="hover:text-zinc-200">
-            {f.name}
-          </button>
-        </span>
-      ))}
+    <div className="flex items-center gap-1 border-b border-border px-3 py-1.5 text-xs text-zinc-400">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+        <button onClick={() => onNavigate(null)} className="hover:text-zinc-200">
+          Library
+        </button>
+        {path.map((f) => (
+          <span key={f.id} className="flex items-center gap-1">
+            <span className="text-zinc-600">/</span>
+            <button onClick={() => onNavigate(f.id)} className="hover:text-zinc-200">
+              {f.name}
+            </button>
+          </span>
+        ))}
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
     </div>
   )
 }

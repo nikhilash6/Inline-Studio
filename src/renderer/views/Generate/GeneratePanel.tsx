@@ -4,6 +4,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useUiStore } from '../../store/uiStore'
 import { useFrameStore } from '../../store/frameStore'
 import type { ComfyWebview } from '../../types/webview'
+import { ConnectionGuide } from './ConnectionGuide'
 
 /**
  * Code injected INTO the embedded ComfyUI page (via webview.executeJavaScript, which
@@ -279,14 +280,7 @@ export function GeneratePanel(): React.JSX.Element {
             className="h-full w-full border-0 bg-white"
           />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <p className="text-sm text-zinc-300">ComfyUI is not running</p>
-            <p className="max-w-md text-xs text-zinc-500">
-              Start ComfyUI and make sure it's reachable at{' '}
-              <span className="text-zinc-300">{url}</span>. Update the URL above if it runs
-              elsewhere, then press Retry.
-            </p>
-          </div>
+          <ConnectionGuide />
         )}
 
         {run && run.outputs.length > 0 && (

@@ -299,7 +299,7 @@ function Board(): React.JSX.Element {
     <div className="relative flex h-full">
       <SideMenu />
 
-      <div ref={wrapperRef} className="relative flex-1">
+      <div ref={wrapperRef} className="relative flex-1 bg-panel">
         {error && (
           <div className="absolute left-2 top-2 z-10 rounded bg-red-950/80 px-2 py-1 text-xs text-red-300">
             {error}
@@ -337,6 +337,8 @@ function Board(): React.JSX.Element {
           <Background gap={22} size={2.5} color="#525a66" />
         </ReactFlow>
 
+        {items.length === 0 && <EmptyCanvasHint />}
+
         <CanvasToolbar
           onAddLayer={() => {
             const { x, y } = centre()
@@ -354,6 +356,33 @@ function Board(): React.JSX.Element {
       </div>
 
       <FrameInspector />
+    </div>
+  )
+}
+
+/** Centered hint shown over an empty canvas. Non-interactive so it never blocks drops. */
+function EmptyCanvasHint(): React.JSX.Element {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+      <div className="flex max-w-sm flex-col items-center gap-2 text-center">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-9 w-9 text-zinc-600"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path d="m21 15-4.5-4.5L7 20" />
+        </svg>
+        <p className="text-sm font-medium text-zinc-300">Your canvas is empty</p>
+        <p className="text-xs leading-relaxed text-zinc-500">
+          Drag an asset from the Assets panel onto the canvas to create your first frame.
+        </p>
+      </div>
     </div>
   )
 }
