@@ -65,12 +65,19 @@ function rowToTake(row: TakeRow): Take {
 interface FrameInputRow {
   id: string
   frame_id: string
-  asset_id: string
+  asset_id: string | null
+  source_frame_id: string | null
   position: number
 }
 
 function rowToFrameInput(row: FrameInputRow): FrameInput {
-  return { id: row.id, frameId: row.frame_id, assetId: row.asset_id, position: row.position }
+  return {
+    id: row.id,
+    frameId: row.frame_id,
+    assetId: row.asset_id,
+    sourceFrameId: row.source_frame_id,
+    position: row.position,
+  }
 }
 
 function projectId(): string {
@@ -157,6 +164,74 @@ export function addFromAsset(assetId: string): Frame {
   return createFrame(assetById(assetId))
 }
 
+/** Create an empty frame (no inputs yet) — fed later by a dropped asset or a flow link. */
+export function createEmptyFrame(): Frame {
+  const db = getDb()
+  const seqId = defaultSequenceId()
+  const count = (
+    db.prepare('SELECT COUNT(*) AS n FROM frames WHERE sequence_id = ?').get(seqId) as { n: number }
+  ).n
+  const now = Date.now()
+  const frame: Frame = {
+    id: randomUUID(),
+    sequenceId: seqId,
+    name: String(count + 1),
+    kind: 'image',
+    position: count,
+    inputAssetId: null,
+    heroTakeId: null,
+    workflowTemplateId: null,
+    comfyWorkflowName: null,
+    createdAt: now,
+    updatedAt: now,
+  }
+  db.prepare(
+    `INSERT INTO frames
+       (id, sequence_id, name, kind, position, input_asset_id, hero_take_id, workflow_template_id, comfy_workflow_name, created_at, updated_at)
+     VALUES (@id, @sequenceId, @name, @kind, @position, @inputAssetId, @heroTakeId, @workflowTemplateId, @comfyWorkflowName, @createdAt, @updatedAt)`,
+  ).run(frame)
+  return frame
+}
+
+/**
+ * Link another frame's output as an input (the refine/flow connector). Resolves to
+ * `sourceFrameId`'s hero take at generate time. Deduped; self-links are rejected.
+ */
+export function addSourceInput(frameId: string, sourceFrameId: string): FrameInput {
+  getFrame(frameId)
+  getFrame(sourceFrameId)
+  if (frameId === sourceFrameId) throw new Error('A frame cannot use its own output as input.')
+  const existing = frameInputRows(frameId)
+  const dup = existing.find((r) => r.source_frame_id === sourceFrameId)
+  if (dup) return rowToFrameInput(dup)
+  const input: FrameInput = {
+    id: randomUUID(),
+    frameId,
+    assetId: null,
+    sourceFrameId,
+    position: existing.length,
+  }
+  getDb()
+    .prepare(
+      'INSERT INTO frame_inputs (id, frame_id, asset_id, source_frame_id, position) VALUES (?, ?, NULL, ?, ?)',
+    )
+    .run(input.id, input.frameId, sourceFrameId, input.position)
+  return input
+}
+
+/** The file path + basename of a frame's hero take, or null if it has none. */
+function heroTakeFile(frameId: string): { filePath: string; name: string } | null {
+  const fr = getDb().prepare('SELECT hero_take_id FROM frames WHERE id = ?').get(frameId) as
+    | { hero_take_id: string | null }
+    | undefined
+  if (!fr?.hero_take_id) return null
+  const tk = getDb().prepare('SELECT file_path FROM takes WHERE id = ?').get(fr.hero_take_id) as
+    | { file_path: string }
+    | undefined
+  if (!tk) return null
+  return { filePath: tk.file_path, name: tk.file_path.split('/').pop() ?? tk.file_path }
+}
+
 export async function importAsFrames(): Promise<Frame[]> {
   const assets = await importViaDialog(null)
   return assets
@@ -234,6 +309,7 @@ export function addInput(frameId: string, assetId: string): FrameInput {
     id: randomUUID(),
     frameId,
     assetId,
+    sourceFrameId: null,
     position: existing.length,
   }
   getDb()
@@ -261,33 +337,34 @@ export function reorderInputs(frameId: string, orderedAssetIds: string[]): void 
   tx()
 }
 
-/** Input filenames (basenames) of a frame, in order — used to seed the workflow Note. */
-export function frameInputFileNames(frameId: string): string[] {
-  const ids = frameInputRows(frameId).map((r) => r.asset_id)
-  if (ids.length === 0) return []
-  const placeholders = ids.map(() => '?').join(',')
-  const rows = getDb()
-    .prepare(`SELECT id, file_path FROM assets WHERE id IN (${placeholders})`)
-    .all(...ids) as Array<{ id: string; file_path: string }>
-  const byId = new Map(rows.map((r) => [r.id, r.file_path.split('/').pop() ?? r.file_path]))
-  return ids.map((id) => byId.get(id)).filter((n): n is string => !!n)
+/**
+ * Resolve a frame's inputs to file paths + basenames, in order. Asset inputs map to
+ * their library file; flow inputs (`source_frame_id`) map to the source frame's hero
+ * take. Rows that don't resolve (e.g. a flow source with no hero take yet) are skipped.
+ */
+export function frameInputAssetPaths(frameId: string): Array<{ filePath: string; name: string }> {
+  const out: Array<{ filePath: string; name: string }> = []
+  for (const row of frameInputRows(frameId)) {
+    if (row.asset_id) {
+      const asset = getDb()
+        .prepare('SELECT file_path FROM assets WHERE id = ?')
+        .get(row.asset_id) as { file_path: string } | undefined
+      if (asset)
+        out.push({
+          filePath: asset.file_path,
+          name: asset.file_path.split('/').pop() ?? asset.file_path,
+        })
+    } else if (row.source_frame_id) {
+      const hero = heroTakeFile(row.source_frame_id)
+      if (hero) out.push(hero)
+    }
+  }
+  return out
 }
 
-/** Asset-backed inputs of a frame: project-relative file path + basename, in order. */
-export function frameInputAssetPaths(frameId: string): Array<{ filePath: string; name: string }> {
-  const ids = frameInputRows(frameId)
-    .map((r) => r.asset_id)
-    .filter((id): id is string => !!id)
-  if (ids.length === 0) return []
-  const placeholders = ids.map(() => '?').join(',')
-  const rows = getDb()
-    .prepare(`SELECT id, file_path FROM assets WHERE id IN (${placeholders})`)
-    .all(...ids) as Array<{ id: string; file_path: string }>
-  const byId = new Map(rows.map((r) => [r.id, r.file_path]))
-  return ids
-    .map((id) => byId.get(id))
-    .filter((p): p is string => !!p)
-    .map((filePath) => ({ filePath, name: filePath.split('/').pop() ?? filePath }))
+/** Input filenames (basenames) of a frame, in order — used to seed the workflow Note. */
+export function frameInputFileNames(frameId: string): string[] {
+  return frameInputAssetPaths(frameId).map((p) => p.name)
 }
 
 /** All takes across the project (renderer groups by frameId). */

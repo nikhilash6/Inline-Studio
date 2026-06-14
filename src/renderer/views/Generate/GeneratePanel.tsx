@@ -164,6 +164,13 @@ export function GeneratePanel(): React.JSX.Element {
     setCaptured((s) => new Set(s).add(output.url))
   }
 
+  // Reload the embedded page. Reset webviewReady so the save / open-workflow hooks
+  // re-inject on the next dom-ready (the reloaded page starts without them).
+  const reloadWebview = (): void => {
+    setWebviewReady(false)
+    webviewRef.current?.reload()
+  }
+
   const check = async (): Promise<void> => {
     try {
       const res = await window.storyline.comfy.status()
@@ -300,10 +307,13 @@ export function GeneratePanel(): React.JSX.Element {
           Save
         </button>
         <button
-          onClick={() => void check()}
-          className="rounded border border-border px-2 py-1 text-xs text-zinc-300 hover:bg-surface"
+          onClick={reloadWebview}
+          disabled={!running}
+          title="Reload the embedded ComfyUI page"
+          className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-zinc-300 hover:bg-surface disabled:opacity-40"
         >
-          Retry
+          <RefreshIcon />
+          Refresh
         </button>
       </div>
 
@@ -330,6 +340,23 @@ export function GeneratePanel(): React.JSX.Element {
         )}
       </div>
     </div>
+  )
+}
+
+function RefreshIcon(): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-3.5 w-3.5"
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
   )
 }
 

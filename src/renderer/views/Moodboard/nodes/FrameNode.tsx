@@ -12,6 +12,9 @@ interface FrameNodeData extends Record<string, unknown> {
   frameId: string
 }
 
+/** A resolved carousel thumbnail (from an asset input or a flow/source-frame input). */
+type Thumb = { id: string; assetId: string | null; url: string; kind: 'image' | 'video' | 'audio' }
+
 // Bounds for the media body when fitting to a media's aspect ratio — keeps very
 // wide/tall inputs from collapsing or ballooning the node.
 const MIN_BODY = 160
@@ -44,6 +47,8 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
   const uploadInputs = useFrameStore((s) => s.uploadInputs)
   const reorderInputs = useFrameStore((s) => s.reorderInputs)
   const addInputs = useFrameStore((s) => s.addInputs)
+  const allFrames = useFrameStore((s) => s.frames)
+  const takesByFrame = useFrameStore((s) => s.takesByFrame)
   const assets = useAssetStore((s) => s.assets)
   const item = useMoodboardStore((s) => s.items.find((it) => it.id === id))
   const updateItem = useMoodboardStore((s) => s.updateItem)
@@ -61,9 +66,26 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
   // the height update on every render, which would loop and freeze the canvas.
   const lastFit = useRef<string>('')
 
+  // Resolve each input to a thumbnail: asset inputs → their media; flow inputs
+  // (sourceFrameId from a connected Preview) → that frame's hero take.
   const thumbs = inputs
-    .map((i) => assets.find((a) => a.id === i.assetId))
-    .filter((a): a is NonNullable<typeof a> => !!a)
+    .map((i): Thumb | null => {
+      if (i.assetId) {
+        const a = assets.find((x) => x.id === i.assetId)
+        return a ? { id: i.id, assetId: a.id, url: mediaUrl(a.filePath), kind: a.kind } : null
+      }
+      if (i.sourceFrameId) {
+        const sf = allFrames.find((f) => f.id === i.sourceFrameId)
+        const hero = sf
+          ? (takesByFrame[sf.id] ?? []).find((t) => t.id === sf.heroTakeId)
+          : undefined
+        return hero
+          ? { id: i.id, assetId: null, url: mediaUrl(hero.filePath), kind: hero.kind }
+          : null
+      }
+      return null
+    })
+    .filter((t): t is Thumb => !!t)
   const count = thumbs.length
   const safeIdx = count ? Math.min(idx, count - 1) : 0
   const cur = count ? thumbs[safeIdx] : undefined
@@ -106,9 +128,15 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
     void uploadInputs(frame.id)
   }
 
+  // Move the current input to the front. Reordering is keyed by asset id, so it only
+  // applies when every input is asset-backed (flow inputs have no asset id).
+  const canReorder = thumbs.every((t) => t.assetId)
   const makeHero = (): void => {
-    if (!cur || safeIdx === 0) return
-    const ordered = [cur.id, ...thumbs.filter((_, i) => i !== safeIdx).map((a) => a.id)]
+    if (!cur || safeIdx === 0 || !canReorder) return
+    const ordered = thumbs
+      .slice(safeIdx, safeIdx + 1)
+      .concat(thumbs.filter((_, i) => i !== safeIdx))
+      .map((t) => t.assetId as string)
     void reorderInputs(frameId, ordered)
     setIdx(0)
   }
@@ -147,6 +175,25 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
           onDrop={onDrop}
         >
           <div className="flex items-center gap-1.5 border-b border-border bg-panel px-2 py-1">
+            <span
+              className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-300"
+              title="Connect a Preview's output here to feed this frame"
+            >
+              <Handle
+                type="target"
+                id="in"
+                position={Position.Left}
+                style={{
+                  position: 'relative',
+                  top: 'auto',
+                  right: 'auto',
+                  left: 'auto',
+                  transform: 'none',
+                }}
+                className="!h-3 !w-3 !border-2 !border-surface !bg-emerald-400"
+              />
+              Input
+            </span>
             <span className="min-w-0 flex-1 truncate text-xs font-semibold text-zinc-100">
               Frame {frame?.name ?? '—'}
             </span>
@@ -175,7 +222,7 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
             {cur ? (
               cur.kind === 'video' ? (
                 <video
-                  src={mediaUrl(cur.filePath)}
+                  src={cur.url}
                   muted
                   preload="metadata"
                   onLoadedMetadata={(e) => {
@@ -188,7 +235,7 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
                 <span className="text-2xl">🎵</span>
               ) : (
                 <img
-                  src={mediaUrl(cur.filePath)}
+                  src={cur.url}
                   alt=""
                   onLoad={(e) => {
                     const img = e.currentTarget
@@ -200,7 +247,8 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
               )
             ) : (
               <span className="p-3 text-center text-[11px] text-zinc-600">
-                Drop an asset to set this frame&apos;s input
+                Drop an asset here, or connect a Preview&apos;s output to set this frame&apos;s
+                input.
               </span>
             )}
 
@@ -241,7 +289,7 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
                   <span className="absolute left-1 top-1 rounded bg-emerald-500/80 px-1 text-[9px] font-medium text-white">
                     Hero
                   </span>
-                ) : (
+                ) : canReorder ? (
                   <button
                     onClick={makeHero}
                     title="Use this input as the hero"
@@ -249,7 +297,7 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
                   >
                     ★ Set hero
                   </button>
-                )}
+                ) : null}
               </>
             )}
           </div>

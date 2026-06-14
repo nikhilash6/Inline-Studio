@@ -134,7 +134,9 @@ function Board(): React.JSX.Element {
   const addFrameItemInLayer = useMoodboardStore((s) => s.addFrameItemInLayer)
   const addPreview = useMoodboardStore((s) => s.addPreview)
   const addLayer = useMoodboardStore((s) => s.addLayer)
+  const addEmptyFrame = useMoodboardStore((s) => s.addEmptyFrame)
   const duplicateItems = useMoodboardStore((s) => s.duplicateItems)
+  const addSourceInput = useFrameStore((s) => s.addSourceInput)
   const assets = useAssetStore((s) => s.assets)
   const loadAssets = useAssetStore((s) => s.load)
   const loadFrames = useFrameStore((s) => s.load)
@@ -237,8 +239,26 @@ function Board(): React.JSX.Element {
   }
 
   const onConnect = (c: Connection): void => {
-    if (c.source && c.target && c.source !== c.target)
-      void connect(c.source, c.target, c.sourceHandle ?? null, c.targetHandle ?? null)
+    if (!c.source || !c.target || c.source === c.target) return
+    void connect(c.source, c.target, c.sourceHandle ?? null, c.targetHandle ?? null)
+
+    // Preview output → Frame input: also wire the data link. The frame takes the
+    // preview's source frame (whoever feeds the preview) as a live input — resolved
+    // to that frame's hero take at generate time.
+    const src = items.find((it) => it.id === c.source)
+    const tgt = items.find((it) => it.id === c.target)
+    if (
+      src?.type === 'preview' &&
+      tgt?.type === 'frame' &&
+      c.targetHandle === 'in' &&
+      tgt.frameId
+    ) {
+      const feed = connectors.find((k) => k.toItemId === src.id)
+      const sourceFrameId = feed
+        ? items.find((it) => it.id === feed.fromItemId)?.frameId
+        : undefined
+      if (sourceFrameId) void addSourceInput(tgt.frameId, sourceFrameId)
+    }
   }
 
   const onDrop = (e: React.DragEvent): void => {
@@ -340,6 +360,10 @@ function Board(): React.JSX.Element {
         {items.length === 0 && <EmptyCanvasHint />}
 
         <CanvasToolbar
+          onAddFrame={() => {
+            const { x, y } = centre()
+            void addEmptyFrame(x, y)
+          }}
           onAddLayer={() => {
             const { x, y } = centre()
             void addLayer(x, y)

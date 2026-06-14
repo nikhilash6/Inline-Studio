@@ -7,6 +7,7 @@ import {
   addAssetItem,
   addTextItem,
   addFrameFromAsset,
+  addEmptyFrame,
   addFrameItem,
   addPreview,
   addLayer,
@@ -41,6 +42,10 @@ export function registerMoodboardHandlers(): void {
   handle<[string, number, number], MoodboardItem>(
     IpcChannels.moodboard.addFrameFromAsset,
     (assetId, x, y) => addFrameFromAsset(str(assetId, 'asset id'), num(x, 'x'), num(y, 'y')),
+  )
+
+  handle<[number, number], MoodboardItem>(IpcChannels.moodboard.addEmptyFrame, (x, y) =>
+    addEmptyFrame(num(x, 'x'), num(y, 'y')),
   )
 
   handle<[string, number, number], MoodboardItem>(

@@ -22,7 +22,7 @@ export function ConnectionGuide(): React.JSX.Element {
         </div>
         <p className="mb-5 text-xs text-zinc-500">
           Storyline renders every shot through your own ComfyUI. Pick how you want to run it, then
-          paste its address into the URL field above and press Retry.
+          paste its address into the URL field above and press Save.
         </p>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -60,7 +60,7 @@ function LocalCard(): React.JSX.Element {
         </code>
         ).
       </Step>
-      <Step n={3}>Paste it into the URL field above and press Retry.</Step>
+      <Step n={3}>Paste it into the URL field above and press Save.</Step>
     </Card>
   )
 }
@@ -92,7 +92,7 @@ function CloudCard(): React.JSX.Element {
       <code className="block truncate rounded-md border border-border bg-black/40 px-2 py-1.5 text-[11px] text-zinc-300">
         {EXAMPLE_RUNPOD_URL}
       </code>
-      <Step n={3}>Paste that URL into the field above and press Retry.</Step>
+      <Step n={3}>Paste that URL into the field above and press Save.</Step>
       <VideoThumb videoId={DEMO_VIDEO_ID} href={DEMO_VIDEO_URL} />
     </Card>
   )

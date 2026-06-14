@@ -54,11 +54,16 @@ export interface Frame {
   updatedAt: number
 }
 
-/** A library asset used as one of a frame's inputs (a frame can have several). */
+/**
+ * One of a frame's inputs (a frame can have several). An input is either a library
+ * asset (`assetId`) or a live link to another frame's output (`sourceFrameId`) — the
+ * latter resolves to that frame's hero take at generate time (the refine/flow link).
+ */
 export interface FrameInput {
   id: string
   frameId: string
-  assetId: string
+  assetId: string | null
+  sourceFrameId: string | null
   position: number
 }
 

@@ -64,6 +64,7 @@ export const IpcChannels = {
     heroTakes: 'frames:heroTakes',
     listInputs: 'frames:listInputs',
     addInput: 'frames:addInput',
+    addSourceInput: 'frames:addSourceInput',
     removeInput: 'frames:removeInput',
     reorderInputs: 'frames:reorderInputs',
     listAllTakes: 'frames:listAllTakes',
@@ -91,6 +92,7 @@ export const IpcChannels = {
     addAsset: 'moodboard:addAsset',
     addText: 'moodboard:addText',
     addFrameFromAsset: 'moodboard:addFrameFromAsset',
+    addEmptyFrame: 'moodboard:addEmptyFrame',
     addFrameItem: 'moodboard:addFrameItem',
     addPreview: 'moodboard:addPreview',
     addLayer: 'moodboard:addLayer',
@@ -194,6 +196,8 @@ export interface StorylineApi {
     listInputs(): Promise<Result<FrameInput[]>>
     /** Append a library asset as an input of the frame. */
     addInput(frameId: string, assetId: string): Promise<Result<FrameInput>>
+    /** Link another frame's output as an input (resolves to its hero take). */
+    addSourceInput(frameId: string, sourceFrameId: string): Promise<Result<FrameInput>>
     /** Remove an input; refused if it's the frame's last input. */
     removeInput(frameId: string, assetId: string): Promise<Result<void>>
     /** Persist a new input ordering for the frame. */
@@ -238,6 +242,8 @@ export interface StorylineApi {
     addText(x: number, y: number): Promise<Result<MoodboardItem>>
     /** Create a frame from a library asset AND place a frame node on the canvas. */
     addFrameFromAsset(assetId: string, x: number, y: number): Promise<Result<MoodboardItem>>
+    /** Create an empty frame AND place a frame node on the canvas at (x, y). */
+    addEmptyFrame(x: number, y: number): Promise<Result<MoodboardItem>>
     /** Place an existing frame as a node on the canvas. */
     addFrameItem(frameId: string, x: number, y: number): Promise<Result<MoodboardItem>>
     /** Add an empty Preview node at (x, y). */

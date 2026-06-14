@@ -15,7 +15,7 @@ import type {
 import type { MoodboardItemPatch } from '@shared/ipc'
 import { getDb } from '../db'
 import { importViaDialog } from '../assets/store'
-import { addFromAsset as createFrameFromAsset } from '../frames/store'
+import { addFromAsset as createFrameFromAsset, createEmptyFrame } from '../frames/store'
 
 const DEFAULT_SIZE: Record<'image' | 'video' | 'audio', { w: number; h: number }> = {
   image: { w: 320, h: 180 },
@@ -207,6 +207,12 @@ export function addFrameItem(frameId: string, x: number, y: number): MoodboardIt
 /** Create a frame from a library asset AND place a frame node on the canvas. */
 export function addFrameFromAsset(assetId: string, x: number, y: number): MoodboardItem {
   const frame = createFrameFromAsset(assetId)
+  return addFrameItem(frame.id, x, y)
+}
+
+/** Create an empty frame AND place a frame node on the canvas. */
+export function addEmptyFrame(x: number, y: number): MoodboardItem {
+  const frame = createEmptyFrame()
   return addFrameItem(frame.id, x, y)
 }
 

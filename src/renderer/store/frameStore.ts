@@ -25,6 +25,8 @@ interface FrameState {
   importAsFrames: () => Promise<void>
   addFromAssets: (assetIds: string[]) => Promise<void>
   addInputs: (frameId: string, assetIds: string[]) => Promise<void>
+  /** Link another frame's output as an input (resolves to its hero take). */
+  addSourceInput: (frameId: string, sourceFrameId: string) => Promise<void>
   removeInput: (frameId: string, assetId: string) => Promise<void>
   reorderInputs: (frameId: string, orderedAssetIds: string[]) => Promise<void>
   setHero: (frameId: string, takeId: string | null) => Promise<void>
@@ -121,6 +123,20 @@ export const useFrameStore = create<FrameState>((set, get) => ({
         const ids = new Set(existing.map((i) => i.id))
         const merged = [...existing, ...added.filter((i) => !ids.has(i.id))]
         return { inputsByFrame: { ...s.inputsByFrame, [frameId]: merged } }
+      })
+    } catch (e) {
+      set({ error: ipcErrorMessage(e) })
+    }
+  },
+
+  addSourceInput: async (frameId, sourceFrameId) => {
+    try {
+      const res = await window.storyline.frames.addSourceInput(frameId, sourceFrameId)
+      if (!res.ok) return set({ error: res.error })
+      set((s) => {
+        const existing = s.inputsByFrame[frameId] ?? []
+        if (existing.some((i) => i.id === res.value.id)) return {}
+        return { inputsByFrame: { ...s.inputsByFrame, [frameId]: [...existing, res.value] } }
       })
     } catch (e) {
       set({ error: ipcErrorMessage(e) })

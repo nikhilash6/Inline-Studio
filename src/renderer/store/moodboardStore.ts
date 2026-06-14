@@ -28,6 +28,8 @@ interface MoodboardState {
     y: number,
     parentId: string | null,
   ) => Promise<void>
+  /** Create an empty frame and place its node on the canvas. */
+  addEmptyFrame: (x: number, y: number) => Promise<void>
   addPreview: (x: number, y: number) => Promise<void>
   addLayer: (x: number, y: number) => Promise<void>
   /** Place an existing asset on the board, parented to a layer when given. */
@@ -174,6 +176,18 @@ export const useMoodboardStore = create<MoodboardState>((set) => ({
       const res = await window.storyline.moodboard.addFrameItem(frameId, x, y)
       if (!res.ok) return set({ error: res.error })
       set((s) => ({ items: [...s.items, res.value] }))
+    } catch (e) {
+      set({ error: ipcErrorMessage(e) })
+    }
+  },
+
+  addEmptyFrame: async (x, y) => {
+    try {
+      const res = await window.storyline.moodboard.addEmptyFrame(x, y)
+      if (!res.ok) return set({ error: res.error })
+      set((s) => ({ items: [...s.items, res.value] }))
+      // The new frame exists in main — refresh the frame store so its node resolves.
+      await useFrameStore.getState().load()
     } catch (e) {
       set({ error: ipcErrorMessage(e) })
     }

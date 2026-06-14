@@ -53,6 +53,8 @@ const api: StorylineApi = {
     listInputs: () => ipcRenderer.invoke(IpcChannels.frames.listInputs),
     addInput: (frameId: string, assetId: string) =>
       ipcRenderer.invoke(IpcChannels.frames.addInput, frameId, assetId),
+    addSourceInput: (frameId: string, sourceFrameId: string) =>
+      ipcRenderer.invoke(IpcChannels.frames.addSourceInput, frameId, sourceFrameId),
     removeInput: (frameId: string, assetId: string) =>
       ipcRenderer.invoke(IpcChannels.frames.removeInput, frameId, assetId),
     reorderInputs: (frameId: string, orderedAssetIds: string[]) =>
@@ -85,6 +87,8 @@ const api: StorylineApi = {
     addText: (x: number, y: number) => ipcRenderer.invoke(IpcChannels.moodboard.addText, x, y),
     addFrameFromAsset: (assetId: string, x: number, y: number) =>
       ipcRenderer.invoke(IpcChannels.moodboard.addFrameFromAsset, assetId, x, y),
+    addEmptyFrame: (x: number, y: number) =>
+      ipcRenderer.invoke(IpcChannels.moodboard.addEmptyFrame, x, y),
     addFrameItem: (frameId: string, x: number, y: number) =>
       ipcRenderer.invoke(IpcChannels.moodboard.addFrameItem, frameId, x, y),
     addPreview: (x: number, y: number) =>

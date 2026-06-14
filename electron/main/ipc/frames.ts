@@ -16,6 +16,7 @@ import {
   heroTakes,
   listInputs,
   addInput,
+  addSourceInput,
   removeInput,
   reorderInputs,
   listAllTakes,
@@ -57,6 +58,11 @@ export function registerFrameHandlers(): void {
   handle<[], FrameInput[]>(IpcChannels.frames.listInputs, () => listInputs())
   handle<[string, string], FrameInput>(IpcChannels.frames.addInput, (frameId, assetId) =>
     addInput(str(frameId, 'frame id'), str(assetId, 'asset id')),
+  )
+  handle<[string, string], FrameInput>(
+    IpcChannels.frames.addSourceInput,
+    (frameId, sourceFrameId) =>
+      addSourceInput(str(frameId, 'frame id'), str(sourceFrameId, 'source frame id')),
   )
   handle<[string, string], void>(IpcChannels.frames.removeInput, (frameId, assetId) =>
     removeInput(str(frameId, 'frame id'), str(assetId, 'asset id')),
