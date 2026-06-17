@@ -154,6 +154,12 @@ export function GeneratePanel(): React.JSX.Element {
   const seenPromptId = useRef<string | null>(null)
   // The frame whose workflow is currently open — for safety-net pulls on switch/leave.
   const prevFrameRef = useRef<string | null>(null)
+  // Consecutive failed status pings — used to debounce the "not reachable" state so a
+  // single slow ping doesn't tear down the embedded page (see `check`).
+  const failures = useRef(0)
+  // Whether ComfyUI has ever been reachable this session. Once it has, we keep the
+  // <webview> mounted and overlay the guide when it drops — never unmount it.
+  const [everConnected, setEverConnected] = useState(false)
 
   const running = status?.running ?? false
   const url = status?.url ?? comfyUrl
@@ -172,12 +178,30 @@ export function GeneratePanel(): React.JSX.Element {
   }
 
   const check = async (): Promise<void> => {
+    let down = false
+    let nextUrl = comfyUrl
     try {
       const res = await window.storyline.comfy.status()
-      if (res.ok) setStatus(res.value)
+      if (res.ok) {
+        nextUrl = res.value.url
+        down = !res.value.running
+      } else {
+        down = true
+      }
     } catch {
-      setStatus({ running: false, url: comfyUrl })
+      down = true
     }
+    if (!down) {
+      failures.current = 0
+      setStatus({ running: true, url: nextUrl })
+      return
+    }
+    // A single missed/slow ping must NOT flip `running` to false: that would unmount
+    // the embedded ComfyUI page and lose in-progress work. ComfyUI's single-threaded
+    // server routinely stalls past the ping timeout while generating, so only declare
+    // it down after several consecutive failures (~12s at the 4s poll interval).
+    failures.current += 1
+    if (failures.current >= 3) setStatus({ running: false, url: nextUrl })
   }
 
   useEffect(() => {
@@ -283,6 +307,12 @@ export function GeneratePanel(): React.JSX.Element {
     if (mode !== 'generate' && activeFrameId) void pullWorkflow(activeFrameId)
   }, [mode, activeFrameId, pullWorkflow])
 
+  // Once ComfyUI has been reachable, remember it so the <webview> stays mounted even
+  // across a transient drop — we overlay the guide rather than destroying the page.
+  useEffect(() => {
+    if (running) setEverConnected(true)
+  }, [running])
+
   return (
     <div className="flex h-full flex-col bg-panel">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -318,7 +348,9 @@ export function GeneratePanel(): React.JSX.Element {
       </div>
 
       <div className="relative flex-1">
-        {running ? (
+        {running || everConnected ? (
+          // Mounted once connected and never unmounted on a transient drop — destroying
+          // and recreating this element is a full page reload that loses in-progress work.
           <webview
             ref={webviewRef}
             src={url}
@@ -327,6 +359,12 @@ export function GeneratePanel(): React.JSX.Element {
           />
         ) : (
           <ConnectionGuide />
+        )}
+
+        {everConnected && !running && (
+          <div className="absolute inset-0 z-20 bg-panel">
+            <ConnectionGuide />
+          </div>
         )}
 
         {run && run.outputs.length > 0 && (

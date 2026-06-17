@@ -1,6 +1,6 @@
 {
   "name": "storyline",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Narrative-first desktop frontend for filmmakers, using ComfyUI as an open generative render-farm.",
   "author": "Storyline",
   "license": "MIT",

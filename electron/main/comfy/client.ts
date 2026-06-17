@@ -36,7 +36,9 @@ export async function ping(): Promise<ComfyStatus> {
   const url = baseUrl()
   try {
     const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), 2500)
+    // Generous: ComfyUI's server can stall on its event loop mid-render, and a too-short
+    // timeout here reads as "not reachable" and would tear down the embedded page.
+    const timer = setTimeout(() => ctrl.abort(), 6000)
     const res = await fetch(`${url}/system_stats`, { signal: ctrl.signal })
     clearTimeout(timer)
     return { running: res.ok, url }
