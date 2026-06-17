@@ -1,12 +1,12 @@
 name: Build & Release
 
 # Build installers for macOS, Windows and Linux and publish them to this repo's
-# GitHub Releases. Triggered by pushing a version tag (e.g. v0.1.0), so releases are
-# incremental — one per tag. Bump + tag with:  npm version patch && git push --follow-tags
+# GitHub Releases. Triggered on every push to main; electron-builder publishes a release
+# for the version in package.json (bump it before pushing to cut a new release).
 # Each OS builds on its own runner so the native SQLite module is compiled per platform.
 on:
   push:
-    tags: ['v*']
+    branches: ['main']
   workflow_dispatch: {}
 
 # electron-builder needs to create/update releases on this repo.
