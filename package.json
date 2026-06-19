@@ -1,6 +1,6 @@
 {
   "name": "inline-studio",
-  "version": "1.0.21",
+  "version": "1.0.3",
   "description": "Narrative-first desktop frontend for filmmakers, using ComfyUI as an open generative render-farm.",
   "author": "Inline Studio",
   "license": "MIT",
@@ -28,6 +28,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",
     "@xyflow/react": "^12.11.0",
+    "archiver": "^7.0.1",
     "better-sqlite3": "^11.8.1",
     "ffmpeg-static": "^5.2.0",
     "ffprobe-static": "^3.1.0",
@@ -38,6 +39,7 @@
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
     "@eslint/js": "^9.18.0",
+    "@types/archiver": "^6.0.4",
     "@types/better-sqlite3": "^7.6.12",
     "@types/fluent-ffmpeg": "^2.1.27",
     "@types/node": "^22.10.5",

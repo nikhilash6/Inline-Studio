@@ -28,6 +28,7 @@ import type {
   ComfyOutput,
   ComfyRun,
   ExportResult,
+  ProjectExportResult,
   ProjectMediaDirs,
 } from './types'
 import type { ClaudeProposal } from './claudeActions'
@@ -41,6 +42,7 @@ export const IpcChannels = {
     listRecent: 'project:listRecent',
     current: 'project:current',
     mediaDirs: 'project:mediaDirs',
+    export: 'project:export',
   },
   clipboard: {
     writeText: 'clipboard:writeText',
@@ -172,6 +174,8 @@ export interface InlineStudioApi {
     current(): Promise<Result<Project | null>>
     /** Absolute input/output dirs of the open project, for sharing with ComfyUI. */
     mediaDirs(): Promise<Result<ProjectMediaDirs>>
+    /** Zip a project folder (by path) into a portable .zip; null if the save dialog is cancelled. */
+    export(path: string): Promise<Result<ProjectExportResult | null>>
   }
   clipboard: {
     writeText(text: string): Promise<Result<void>>

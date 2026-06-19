@@ -3,10 +3,27 @@ import { Logo } from '../../components/Logo'
 import { useProjectStore } from '../../store/projectStore'
 
 export function ProjectLauncher(): React.JSX.Element {
-  const { recents, loading, error, createProject, openFromDialog, openByPath } = useProjectStore()
+  const {
+    recents,
+    loading,
+    error,
+    notice,
+    exportingPath,
+    createProject,
+    openFromDialog,
+    openByPath,
+    exportProject,
+  } = useProjectStore()
   const [name, setName] = useState('')
 
   const canCreate = name.trim().length > 0 && !loading
+  const exporting = exportingPath !== null
+
+  // Export a project that isn't in the recents list: pick its folder, then zip it.
+  const exportFromDialog = async (): Promise<void> => {
+    const dir = await window.inlineStudio.dialog.pickDirectory()
+    if (dir.ok && dir.value) void exportProject(dir.value)
+  }
 
   return (
     <div className="flex h-full items-center justify-center p-8">
@@ -41,18 +58,33 @@ export function ProjectLauncher(): React.JSX.Element {
               Create
             </button>
           </div>
-          <button
-            onClick={() => void openFromDialog()}
-            disabled={loading}
-            className="mt-3 text-xs text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline"
-          >
-            …or open an existing project (.inlinestudio or legacy .storyline)
-          </button>
+          <div className="mt-3 flex items-center gap-4 text-xs text-zinc-400">
+            <button
+              onClick={() => void openFromDialog()}
+              disabled={loading}
+              className="underline-offset-2 hover:text-zinc-200 hover:underline"
+            >
+              …or open an existing project
+            </button>
+            <button
+              onClick={() => void exportFromDialog()}
+              disabled={exporting}
+              title="Export any project folder as a portable .zip"
+              className="underline-offset-2 hover:text-zinc-200 hover:underline disabled:opacity-40"
+            >
+              Export a project…
+            </button>
+          </div>
         </section>
 
         {error && (
           <p className="mb-4 rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
             {error}
+          </p>
+        )}
+        {notice && (
+          <p className="mb-4 rounded-lg border border-green-900 bg-green-950/30 px-3 py-2 text-sm text-green-300">
+            {notice}
           </p>
         )}
 
@@ -63,13 +95,21 @@ export function ProjectLauncher(): React.JSX.Element {
           ) : (
             <ul className="divide-y divide-border">
               {recents.map((r) => (
-                <li key={r.path}>
+                <li key={r.path} className="flex items-center gap-2 py-1">
                   <button
                     onClick={() => void openByPath(r.path)}
-                    className="flex w-full items-center justify-between py-2 text-left hover:opacity-80"
+                    className="flex min-w-0 flex-1 items-center justify-between gap-3 py-1 text-left hover:opacity-80"
                   >
-                    <span className="text-sm text-zinc-200">{r.name}</span>
-                    <span className="max-w-[55%] truncate text-xs text-zinc-500">{r.path}</span>
+                    <span className="shrink-0 text-sm text-zinc-200">{r.name}</span>
+                    <span className="min-w-0 truncate text-xs text-zinc-500">{r.path}</span>
+                  </button>
+                  <button
+                    onClick={() => void exportProject(r.path)}
+                    disabled={exporting}
+                    title="Export this project as a portable .zip"
+                    className="shrink-0 rounded border border-border px-2 py-1 text-[11px] text-zinc-300 hover:bg-panel disabled:opacity-40"
+                  >
+                    {exportingPath === r.path ? 'Exporting…' : 'Export'}
                   </button>
                 </li>
               ))}

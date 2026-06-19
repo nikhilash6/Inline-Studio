@@ -5,9 +5,10 @@
 import { dialog } from 'electron'
 import { join } from 'node:path'
 import { IpcChannels, type CreateProjectInput } from '@shared/ipc'
-import type { Project, RecentProject, ProjectMediaDirs } from '@shared/types'
+import type { Project, RecentProject, ProjectMediaDirs, ProjectExportResult } from '@shared/types'
 import { handle } from './handler'
 import { createProject, openProject, getCurrentProject, isProjectFolder } from '../project/store'
+import { exportProject } from '../export/project'
 import { listRecents } from '../project/recents'
 import { getOpenProjectFolder } from '../db'
 
@@ -58,6 +59,11 @@ export function registerProjectHandlers(): void {
     const folder = getOpenProjectFolder()
     if (!folder) throw new Error('No project is open.')
     return { inputDir: join(folder, 'assets'), outputDir: join(folder, 'takes') }
+  })
+
+  handle<[string], ProjectExportResult | null>(IpcChannels.project.export, (path) => {
+    if (typeof path !== 'string' || path.length === 0) throw new Error('Invalid project path.')
+    return exportProject(path)
   })
 
   handle<[], string | null>(IpcChannels.dialog.pickDirectory, async () => {

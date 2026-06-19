@@ -4,17 +4,24 @@
  */
 import { create } from 'zustand'
 import type { Project, RecentProject } from '@shared/types'
+import { ipcErrorMessage } from '../lib/ipcError'
 
 interface ProjectState {
   current: Project | null
   recents: RecentProject[]
   loading: boolean
   error: string | null
+  /** A transient success message (e.g. "Exported to …"). */
+  notice: string | null
+  /** Path of the project currently being exported, if any. */
+  exportingPath: string | null
 
   loadRecents: () => Promise<void>
   createProject: (name: string) => Promise<void>
   openFromDialog: () => Promise<void>
   openByPath: (path: string) => Promise<void>
+  /** Export a project folder (by path) to a portable .zip via a save dialog. */
+  exportProject: (path: string) => Promise<void>
   closeProject: () => void
 }
 
@@ -23,6 +30,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   recents: [],
   loading: false,
   error: null,
+  notice: null,
+  exportingPath: null,
 
   loadRecents: async () => {
     const res = await window.inlineStudio.project.listRecent()
@@ -58,5 +67,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     void get().loadRecents()
   },
 
-  closeProject: () => set({ current: null, error: null }),
+  exportProject: async (path: string) => {
+    set({ exportingPath: path, error: null, notice: null })
+    try {
+      const res = await window.inlineStudio.project.export(path)
+      if (!res.ok) return set({ exportingPath: null, error: res.error })
+      // null = the user cancelled the save dialog.
+      set({ exportingPath: null, notice: res.value ? `Exported to ${res.value.path}` : null })
+    } catch (e) {
+      set({ exportingPath: null, error: ipcErrorMessage(e) })
+    }
+  },
+
+  closeProject: () => set({ current: null, error: null, notice: null }),
 }))

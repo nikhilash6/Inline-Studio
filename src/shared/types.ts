@@ -334,6 +334,12 @@ export interface ProjectMediaDirs {
   outputDir: string
 }
 
+/** Result of exporting a whole project to a portable .zip. */
+export interface ProjectExportResult {
+  /** Absolute path of the written .zip archive. */
+  path: string
+}
+
 /** Summary of an "export frames to folder" run. */
 export interface ExportResult {
   /** Absolute directory the files were written to. */

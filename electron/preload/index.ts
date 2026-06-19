@@ -31,6 +31,7 @@ const api: InlineStudioApi = {
     listRecent: () => ipcRenderer.invoke(IpcChannels.project.listRecent),
     current: () => ipcRenderer.invoke(IpcChannels.project.current),
     mediaDirs: () => ipcRenderer.invoke(IpcChannels.project.mediaDirs),
+    export: (path: string) => ipcRenderer.invoke(IpcChannels.project.export, path),
   },
   clipboard: {
     writeText: (text: string) => ipcRenderer.invoke(IpcChannels.clipboard.writeText, text),
