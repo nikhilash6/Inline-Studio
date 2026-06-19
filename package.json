@@ -10,7 +10,7 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "package": "npm run build && electron-builder",
-    "package:mac": "npm run build && electron-builder --mac",
+    "package:mac": "npm run build && electron-builder --mac --arm64 --x64",
     "package:win": "npm run build && electron-builder --win",
     "package:linux": "npm run build && electron-builder --linux",
     "start": "electron-vite preview",

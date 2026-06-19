@@ -31,12 +31,12 @@ asarUnpack:
 
 mac:
   category: public.app-category.video
-  # Two .dmgs: Apple Silicon (arm64) and Intel (x64).
+  # dmg only; the arch is chosen by the CLI flag (--arm64 / --x64) so each CI job
+  # builds exactly one arch. Do NOT pin `arch:` per target here — a pinned arch is
+  # not overridden by the CLI flag, so every job would build BOTH archs and the two
+  # dmgs would collide on one filename (hdiutil convert then fails).
   target:
-    - target: dmg
-      arch: arm64
-    - target: dmg
-      arch: x64
+    - dmg
   # Unsigned local builds: skip notarization. For distribution, add signing creds.
   identity: null
 
