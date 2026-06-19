@@ -19,14 +19,8 @@ export function ProjectLauncher(): React.JSX.Element {
   const canCreate = name.trim().length > 0 && !loading
   const exporting = exportingPath !== null
 
-  // Export a project that isn't in the recents list: pick its folder, then zip it.
-  const exportFromDialog = async (): Promise<void> => {
-    const dir = await window.inlineStudio.dialog.pickDirectory()
-    if (dir.ok && dir.value) void exportProject(dir.value)
-  }
-
   return (
-    <div className="flex h-full items-center justify-center p-8">
+    <div className="relative flex h-full items-center justify-center p-8">
       <div className="w-full max-w-2xl">
         <header className="mb-10 text-center">
           <div className="flex items-center justify-center gap-3">
@@ -65,14 +59,6 @@ export function ProjectLauncher(): React.JSX.Element {
               className="underline-offset-2 hover:text-zinc-200 hover:underline"
             >
               …or open an existing project
-            </button>
-            <button
-              onClick={() => void exportFromDialog()}
-              disabled={exporting}
-              title="Export any project folder as a portable .zip"
-              className="underline-offset-2 hover:text-zinc-200 hover:underline disabled:opacity-40"
-            >
-              Export a project…
             </button>
           </div>
         </section>
@@ -117,6 +103,18 @@ export function ProjectLauncher(): React.JSX.Element {
           )}
         </section>
       </div>
+
+      <p className="absolute bottom-6 left-0 right-0 text-center text-xs text-zinc-500">
+        Have a question?{' '}
+        <button
+          onClick={() =>
+            void window.inlineStudio.shell.openExternal('https://discord.gg/cSUS88VdY9')
+          }
+          className="text-accent underline-offset-2 hover:underline"
+        >
+          Connect the team on Discord
+        </button>
+      </p>
     </div>
   )
 }

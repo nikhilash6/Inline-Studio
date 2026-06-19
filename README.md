@@ -6,7 +6,7 @@
 
 ComfyUI is the most capable generative engine currently: image, video, audio, LLM, every new model lands there first. But it asks you to think in node graphs and execution order. Filmmakers think in frames, scenes, and sequences. Inline Studio sits in between: you compose your film on a free-form canvas and work frame by frame, while ComfyUI quietly does the generation behind each one.
 
-![Inline Studio canvas](screenshots/screenshot-dashboard.png)
+![Inline Studio canvas](screenshots/screenshot-dashboard-2.png)
 
 > **Status: active development.** The canvas, the project model, the ComfyUI bridge, and the Claude assistant are working today. Timeline editing, a preview player, and video export are next.
 
