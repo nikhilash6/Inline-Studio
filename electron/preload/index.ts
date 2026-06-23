@@ -19,6 +19,9 @@ import type {
   ClaudeDeltaEvent,
   ClaudeDoneEvent,
   ClaudeErrorEvent,
+  UpdateAvailableEvent,
+  UpdateProgressEvent,
+  UpdateDownloadedEvent,
 } from '@shared/types'
 import type { ClaudeProposal } from '@shared/claudeActions'
 import type { IpcRendererEvent } from 'electron'
@@ -149,6 +152,10 @@ const api: InlineStudioApi = {
   shell: {
     openExternal: (url: string) => ipcRenderer.invoke(IpcChannels.shell.openExternal, url),
   },
+  updates: {
+    check: () => ipcRenderer.invoke(IpcChannels.updates.check),
+    quitAndInstall: () => ipcRenderer.invoke(IpcChannels.updates.quitAndInstall),
+  },
   events: {
     onLibraryChanged: (callback: () => void) => {
       const listener = (): void => callback()
@@ -163,6 +170,12 @@ const api: InlineStudioApi = {
       subscribe(IpcChannels.events.claudeDone, callback),
     onClaudeError: (callback: (e: ClaudeErrorEvent) => void) =>
       subscribe(IpcChannels.events.claudeError, callback),
+    onUpdateAvailable: (callback: (e: UpdateAvailableEvent) => void) =>
+      subscribe(IpcChannels.events.updateAvailable, callback),
+    onUpdateProgress: (callback: (e: UpdateProgressEvent) => void) =>
+      subscribe(IpcChannels.events.updateProgress, callback),
+    onUpdateDownloaded: (callback: (e: UpdateDownloadedEvent) => void) =>
+      subscribe(IpcChannels.events.updateDownloaded, callback),
   },
   // Electron 32+: dropped File objects no longer expose `.path`; webUtils resolves it.
   getPathForFile: (file: File) => webUtils.getPathForFile(file),

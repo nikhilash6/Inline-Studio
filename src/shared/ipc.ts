@@ -24,6 +24,9 @@ import type {
   ClaudeDeltaEvent,
   ClaudeDoneEvent,
   ClaudeErrorEvent,
+  UpdateAvailableEvent,
+  UpdateProgressEvent,
+  UpdateDownloadedEvent,
   ComfyStatus,
   ComfyOutput,
   ComfyRun,
@@ -130,6 +133,12 @@ export const IpcChannels = {
   shell: {
     openExternal: 'shell:openExternal',
   },
+  updates: {
+    /** Manually trigger a check for a newer published release. */
+    check: 'updates:check',
+    /** Quit and install a downloaded update (Windows/Linux). */
+    quitAndInstall: 'updates:quitAndInstall',
+  },
   events: {
     /** Main → renderer: the asset library changed (e.g. a video poster/transcode is ready). */
     libraryChanged: 'events:libraryChanged',
@@ -138,6 +147,10 @@ export const IpcChannels = {
     claudeProposal: 'events:claudeProposal',
     claudeDone: 'events:claudeDone',
     claudeError: 'events:claudeError',
+    /** Main → renderer: auto-update lifecycle. */
+    updateAvailable: 'events:updateAvailable',
+    updateProgress: 'events:updateProgress',
+    updateDownloaded: 'events:updateDownloaded',
   },
 } as const
 
@@ -339,6 +352,12 @@ export interface InlineStudioApi {
     /** Open an http(s) URL in the user's default browser. */
     openExternal(url: string): Promise<Result<void>>
   }
+  updates: {
+    /** Trigger a check for a newer published release. */
+    check(): Promise<Result<void>>
+    /** Quit and install a downloaded update (Windows/Linux). */
+    quitAndInstall(): Promise<Result<void>>
+  }
   /** Resolve the absolute path of a File dropped from the OS (Electron webUtils). Sync. */
   getPathForFile(file: File): string
   events: {
@@ -349,6 +368,10 @@ export interface InlineStudioApi {
     onClaudeProposal(callback: (p: ClaudeProposal) => void): () => void
     onClaudeDone(callback: (e: ClaudeDoneEvent) => void): () => void
     onClaudeError(callback: (e: ClaudeErrorEvent) => void): () => void
+    /** Subscribe to auto-update lifecycle pushes. Each returns an unsubscribe fn. */
+    onUpdateAvailable(callback: (e: UpdateAvailableEvent) => void): () => void
+    onUpdateProgress(callback: (e: UpdateProgressEvent) => void): () => void
+    onUpdateDownloaded(callback: (e: UpdateDownloadedEvent) => void): () => void
   }
 }
 

@@ -9,6 +9,7 @@ import { existsSync } from 'node:fs'
 import { registerIpcHandlers } from './ipc'
 import { registerMediaScheme, registerMediaProtocol } from './media/protocol'
 import { closeProjectDb } from './db'
+import { initAutoUpdater } from './updater'
 
 const isDev = !app.isPackaged
 
@@ -76,6 +77,8 @@ app.whenReady().then(() => {
   registerIpcHandlers()
   setDevDockIcon()
   createMainWindow()
+  // Window exists now, so it can receive update broadcasts.
+  initAutoUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow()

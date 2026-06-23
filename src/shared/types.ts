@@ -304,6 +304,22 @@ export interface ClaudeErrorEvent {
   error: string
 }
 
+/** Auto-update events (main → renderer). */
+export interface UpdateAvailableEvent {
+  version: string
+  /** macOS (unsigned) can't self-install, so the renderer opens the releases page instead. */
+  notifyOnly: boolean
+}
+export interface UpdateProgressEvent {
+  /** 0–100. */
+  percent: number
+  transferred: number
+  total: number
+}
+export interface UpdateDownloadedEvent {
+  version: string
+}
+
 /** Result of pinging the configured ComfyUI backend. */
 export interface ComfyStatus {
   running: boolean
