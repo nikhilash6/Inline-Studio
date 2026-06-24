@@ -120,11 +120,18 @@ export function buildComposeArgs(clips: ResolvedClip[], s: ComposeSettings): str
     const input = i + 2
     if (contributesAudio(c)) {
       const ms = Math.round(c.startTime * 1000)
+      const dur = clipDuration(c)
+      // A short fade in/out de-clicks the hard cut where one clip hands off to the next
+      // (otherwise the waveform discontinuity at the boundary is audible).
+      const fade = Math.min(0.02, dur / 4)
+      const fadeOutAt = Math.max(0, dur - fade).toFixed(3)
       const a = `a${aIdx++}`
       filters.push(
-        `[${input}:a]atrim=0:${clipDuration(c).toFixed(3)},asetpts=PTS-STARTPTS,` +
+        `[${input}:a]atrim=0:${dur.toFixed(3)},asetpts=PTS-STARTPTS,` +
           `aformat=sample_rates=44100:channel_layouts=stereo,` +
-          `volume=${clipVolume(c).toFixed(2)},adelay=${ms}|${ms}[${a}]`,
+          `volume=${clipVolume(c).toFixed(2)},` +
+          `afade=t=in:st=0:d=${fade.toFixed(3)},afade=t=out:st=${fadeOutAt}:d=${fade.toFixed(3)},` +
+          `adelay=${ms}|${ms}[${a}]`,
       )
       audioLabels.push(a)
     }

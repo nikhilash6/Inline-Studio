@@ -162,6 +162,9 @@ export interface DirectorClip {
   duration: number
   /** Project-relative waveform peaks JSON for this clip's audio, if any. */
   audioPeaks: string | null
+  /** Fraction [start, end] of the source peaks this clip spans (a trim window; full = 0..1). */
+  peaksStart: number
+  peaksEnd: number
   /** Project-relative thumbnail: a filmstrip PNG for video, the still image for image clips. */
   thumbnail: string | null
 }
@@ -217,6 +220,8 @@ export interface MoodboardItemData {
   director?: DirectorItemData
   /** Project-relative path of a director node's last-built proxy preview MP4. */
   directorPreview?: string
+  /** Project-relative path of a director node's last full-res Export MP4 (shown in a wired preview). */
+  directorExport?: string
   /** Director node: volume of the extracted video audio layer (L1), 0..1 (default 1). */
   l1Volume?: number
   /** Director node: volume of the user audio layer (L2), 0..1 (default 1). */

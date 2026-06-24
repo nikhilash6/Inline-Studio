@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { mediaUrl, takeWaveformPath } from '@shared/media'
 import { useMoodboardStore } from '../../../store/moodboardStore'
@@ -16,6 +16,8 @@ import { NodeFrame } from './NodeFrame'
 export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
   const connectors = useMoodboardStore((s) => s.connectors)
   const items = useMoodboardStore((s) => s.items)
+  const item = items.find((it) => it.id === id)
+  const updateItem = useMoodboardStore((s) => s.updateItem)
   const frames = useFrameStore((s) => s.frames)
   const takesByFrame = useFrameStore((s) => s.takesByFrame)
   const inputsByFrame = useFrameStore((s) => s.inputsByFrame)
@@ -23,10 +25,16 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
   const assets = useAssetStore((s) => s.assets)
   const onMediaContextMenu = useMediaContextMenu()
   const [idx, setIdx] = useState(0)
+  // Fit the node height to the displayed media's aspect ratio (no black letterbox bars).
+  const [aspect, setAspect] = useState<number | null>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
 
   const conn = connectors.find((c) => c.toItemId === id)
   const sourceItem = conn ? items.find((it) => it.id === conn.fromItemId) : undefined
   const frame = sourceItem?.frameId ? frames.find((s) => s.id === sourceItem.frameId) : undefined
+  // A director node's "Out" feeds its exported full-res video (set when Export is clicked).
+  const isDirector = sourceItem?.type === 'director'
+  const directorExport = isDirector ? (sourceItem?.data.directorExport ?? null) : null
 
   // Outputs newest-first, but float the hero take to the front so it shows by default.
   const takes = frame ? (takesByFrame[frame.id] ?? []) : []
@@ -71,6 +79,22 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
         }
       : null
 
+  // Audio shows a waveform (fixed height); only image/video drive the aspect fit.
+  const fitsAspect = isDirector || display?.kind === 'video' || display?.kind === 'image'
+  const itemWidth = item?.width
+  const itemHeight = item?.height
+  // The media body is a CSS aspect-ratio box (like the director's preview), so the video
+  // always fills it with no black edges. Here we just size the *node* to hug that box —
+  // node height = header height + (width / aspect) — so resizing the width keeps aspect at
+  // any size. (Dragging height alone snaps back, i.e. the node maintains the aspect ratio.)
+  useLayoutEffect(() => {
+    const body = bodyRef.current
+    if (!fitsAspect || !aspect || !body || itemWidth == null) return
+    const target = Math.round(body.offsetTop + body.offsetWidth / aspect)
+    if (itemHeight != null && Math.abs(target - itemHeight) < 1) return
+    void updateItem(id, { height: target }, false)
+  }, [fitsAspect, aspect, itemWidth, itemHeight, id, updateItem])
+
   return (
     <>
       <Handle
@@ -92,7 +116,7 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
           <div className="flex items-center gap-1 border-b border-border bg-panel px-2 py-1">
             <span className="text-[10px] text-indigo-400">▣</span>
             <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-zinc-300">
-              Preview{frame ? ` · Frame ${frame.name}` : ''}
+              Preview{frame ? ` · Frame ${frame.name}` : isDirector ? ' · Director' : ''}
             </span>
             {count > 0 && (
               <span className="shrink-0 text-[10px] text-zinc-500">
@@ -100,12 +124,43 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
               </span>
             )}
           </div>
-          <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
-            {display ? (
+          <div
+            ref={bodyRef}
+            className={`relative w-full overflow-hidden bg-black ${fitsAspect ? '' : 'flex flex-1 items-center justify-center'}`}
+            style={fitsAspect ? { aspectRatio: aspect ?? 16 / 9 } : undefined}
+          >
+            {isDirector ? (
+              directorExport ? (
+                <video
+                  src={mediaUrl(directorExport)}
+                  controls
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget
+                    if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight)
+                  }}
+                  onContextMenu={(e) =>
+                    onMediaContextMenu(e, {
+                      src: mediaUrl(directorExport),
+                      name: 'director',
+                      kind: 'video',
+                    })
+                  }
+                  className="absolute inset-0 h-full w-full object-contain"
+                />
+              ) : (
+                <span className="absolute inset-0 flex items-center justify-center p-3 text-center text-[11px] text-zinc-500">
+                  Click Export on the director to render the video here.
+                </span>
+              )
+            ) : display ? (
               display.kind === 'video' ? (
                 <video
                   src={display.src}
                   controls
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget
+                    if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight)
+                  }}
                   onContextMenu={(e) =>
                     onMediaContextMenu(e, {
                       src: display.saveSrc,
@@ -113,7 +168,7 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
                       kind: 'video',
                     })
                   }
-                  className="max-h-full max-w-full object-contain"
+                  className="absolute inset-0 h-full w-full object-contain"
                 />
               ) : display.kind === 'audio' ? (
                 <div className="flex h-full w-full flex-col justify-center gap-2 px-3">
@@ -135,6 +190,11 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
                 <img
                   src={display.src}
                   alt=""
+                  onLoad={(e) => {
+                    const im = e.currentTarget
+                    if (im.naturalWidth && im.naturalHeight)
+                      setAspect(im.naturalWidth / im.naturalHeight)
+                  }}
                   onContextMenu={(e) =>
                     onMediaContextMenu(e, {
                       src: display.saveSrc,
@@ -142,7 +202,7 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
                       kind: display.kind,
                     })
                   }
-                  className="max-h-full max-w-full object-contain"
+                  className="absolute inset-0 h-full w-full object-contain"
                 />
               )
             ) : (

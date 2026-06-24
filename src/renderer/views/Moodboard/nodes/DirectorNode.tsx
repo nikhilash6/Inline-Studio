@@ -182,7 +182,10 @@ export function DirectorNode({ id, data, selected }: NodeProps): React.JSX.Eleme
               </span>
             )}
             <button
-              onClick={() => void exportTimeline(id)}
+              onClick={async () => {
+                const path = await exportTimeline(id)
+                if (path) await reloadBoard()
+              }}
               disabled={rendering || !hasClips}
               className="nodrag rounded bg-accent px-1.5 py-0.5 text-[10px] text-panel hover:brightness-110 disabled:opacity-40"
             >
@@ -333,6 +336,8 @@ function ClipBlock({
       >
         <Waveform
           url={clip.audioPeaks ? mediaUrl(clip.audioPeaks) : null}
+          rangeStart={clip.peaksStart}
+          rangeEnd={clip.peaksEnd}
           className="h-2/3 w-full text-emerald-400"
         />
         {onSetVolume && <ClipVolume volume={clip.volume} onChange={onSetVolume} />}
@@ -397,6 +402,40 @@ function Ruler({ total }: { total: number }): React.JSX.Element {
   )
 }
 
+/** A line volume icon (Lucide-style), matching the widget icons. */
+function VolumeIcon({
+  muted,
+  className,
+}: {
+  muted?: boolean
+  className?: string
+}): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className ?? 'h-3 w-3'}
+    >
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      {muted ? (
+        <>
+          <line x1="22" y1="9" x2="16" y2="15" />
+          <line x1="16" y1="9" x2="22" y2="15" />
+        </>
+      ) : (
+        <>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+        </>
+      )}
+    </svg>
+  )
+}
+
 /** Per-input volume: a speaker icon that toggles an inline slider over the clip. */
 function ClipVolume({
   volume,
@@ -414,9 +453,9 @@ function ClipVolume({
           setOpen((o) => !o)
         }}
         title={`Volume ${Math.round(volume * 100)}%`}
-        className="nodrag absolute left-0.5 top-0.5 z-10 flex h-3.5 w-3.5 items-center justify-center rounded bg-black/60 text-[8px] hover:bg-black/80"
+        className="nodrag absolute left-0.5 top-0.5 z-10 flex h-4 w-4 items-center justify-center rounded bg-black/60 text-zinc-100 hover:bg-black/80"
       >
-        {volume <= 0 ? '🔇' : '🔊'}
+        <VolumeIcon muted={volume <= 0} className="h-2.5 w-2.5" />
       </button>
       {open && (
         <input
@@ -442,7 +481,9 @@ function VolumeSlider({
 }): React.JSX.Element {
   return (
     <label className="flex items-center gap-1" title={`Volume ${Math.round(value * 100)}%`}>
-      <span className="text-[9px] text-zinc-500">🔊</span>
+      <span className="text-zinc-400">
+        <VolumeIcon muted={value <= 0} className="h-3 w-3" />
+      </span>
       <input
         type="range"
         min={0}

@@ -17,6 +17,9 @@ interface WaveformProps {
   className?: string
   /** Click-to-seek: receives a 0..1 fraction of the waveform width. */
   onSeek?: (fraction: number) => void
+  /** Render only this fraction [start, end] of the source peaks (e.g. a trimmed window). */
+  rangeStart?: number
+  rangeEnd?: number
 }
 
 /** Max-pool a peaks array down to at most `target` bars. */
@@ -44,6 +47,8 @@ export function Waveform({
   bars = 200,
   className,
   onSeek,
+  rangeStart = 0,
+  rangeEnd = 1,
 }: WaveformProps): React.JSX.Element {
   const [peaks, setPeaks] = useState<number[] | null>(null)
 
@@ -66,7 +71,17 @@ export function Waveform({
     }
   }, [url])
 
-  const sampled = useMemo(() => (peaks ? resample(peaks, bars) : null), [peaks, bars])
+  const sampled = useMemo(() => {
+    if (!peaks) return null
+    // Slice to the requested window (a trimmed clip shows only its in/out portion).
+    const lo = Math.max(0, Math.min(1, rangeStart))
+    const hi = Math.max(lo, Math.min(1, rangeEnd))
+    const arr =
+      lo > 0 || hi < 1
+        ? peaks.slice(Math.floor(lo * peaks.length), Math.max(1, Math.ceil(hi * peaks.length)))
+        : peaks
+    return resample(arr, bars)
+  }, [peaks, bars, rangeStart, rangeEnd])
 
   const handleClick = onSeek
     ? (e: React.MouseEvent<SVGSVGElement>) => {

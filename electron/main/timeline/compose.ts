@@ -6,7 +6,7 @@
  */
 import { join } from 'node:path'
 import { rmSync } from 'node:fs'
-import { BrowserWindow, dialog } from 'electron'
+import { BrowserWindow } from 'electron'
 import { IpcChannels } from '@shared/ipc'
 import type { DirectorItemData } from '@shared/types'
 import { getOpenProjectFolder } from '../db'
@@ -90,6 +90,12 @@ export async function buildPreview(ownerItemId: string): Promise<string | null> 
  * Render the timeline at full resolution to a user-chosen MP4. Returns the absolute path
  * written, or null if cancelled / nothing to render.
  */
+/**
+ * Render the timeline at full resolution into the project and store it on the director
+ * item (data.directorExport). A Preview node wired to the director's "Out" then displays
+ * it, and the user can save it from there. Returns the project-relative path (null if
+ * nothing to render). Triggered manually by the Export button — never automatically.
+ */
 export async function exportTimeline(ownerItemId: string): Promise<string | null> {
   if (!ffmpegAvailable()) throw new Error('ffmpeg is not available.')
   const folder = getOpenProjectFolder()
@@ -97,21 +103,15 @@ export async function exportTimeline(ownerItemId: string): Promise<string | null
   const { clips } = await resolveTimeline(ownerItemId)
   if (clips.length === 0) return null
 
-  const result = await dialog.showSaveDialog({
-    title: 'Export timeline',
-    defaultPath: 'timeline.mp4',
-    filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
-  })
-  if (result.canceled || !result.filePath) return null
-
   const s = directorSettings(ownerItemId)
+  const relPath = `thumbs/director-${ownerItemId}-export-${Date.now()}.mp4`
   const settings: ComposeSettings = {
     width: even(s.width),
     height: even(s.height),
     fps: s.fps,
     preset: 'veryfast',
     crf: 20,
-    outPath: result.filePath,
+    outPath: join(folder, relPath),
   }
   const total = timelineDuration(clips)
   const handle = composeRender(buildComposeArgs(clips, settings), total, (f) =>
@@ -120,5 +120,17 @@ export async function exportTimeline(ownerItemId: string): Promise<string | null
   const ok = await handle.done
   notifyProgress(ownerItemId, 1)
   if (!ok) throw new Error('Export render failed.')
-  return result.filePath
+
+  // Persist the export path on the director node; drop the previous one.
+  const item = getMoodboardItem(ownerItemId)
+  const prev = item.data.directorExport
+  updateItem(ownerItemId, { data: { ...item.data, directorExport: relPath } })
+  if (prev && prev !== relPath) {
+    try {
+      rmSync(join(folder, prev), { force: true })
+    } catch {
+      // ignore
+    }
+  }
+  return relPath
 }

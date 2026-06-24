@@ -219,6 +219,10 @@ export async function resolveTimeline(ownerItemId: string): Promise<ResolvedTime
       const inputVolume =
         typeof conn.data?.volume === 'number' ? Math.min(1, Math.max(0, conn.data.volume)) : 1
 
+      // The peaks JSON covers the whole source; a trimmed clip shows only its window.
+      const peaksStart = fullDuration > 0 ? Math.min(1, Math.max(0, inPoint / fullDuration)) : 0
+      const peaksEnd = fullDuration > 0 ? Math.min(1, Math.max(0, outPoint / fullDuration)) : 1
+
       const clip: DirectorClip = {
         key: ref.sourceId,
         connectorId: conn.id,
@@ -229,6 +233,8 @@ export async function resolveTimeline(ownerItemId: string): Promise<ResolvedTime
         startTime: cursor,
         duration,
         audioPeaks,
+        peaksStart,
+        peaksEnd,
         thumbnail,
       }
       if (track === 0) display.video.push(clip)
