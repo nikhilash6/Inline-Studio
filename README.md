@@ -9,7 +9,20 @@ ComfyUI is the most capable generative engine going: image, video, audio, LLM, e
 
 ![Inline Studio canvas](screenshots/screenshot-dashboard-2.png)
 
-> **Status: active development.** The canvas, the project model, the ComfyUI bridge, and the Claude assistant are working today. Timeline editing, a preview player, and video export are next.
+## What's new
+
+**Video Director node:** a timeline-in-a-node that combines your rendered frames into a single cut.
+Wire unlimited frame/preview outputs into it to build the video track, layer audio on top (L1 is the
+videos' own audio, L2 is your own music/VO) with per-input and per-layer volume, scrub the in-node
+preview, and export the combined high-res video.
+
+**Edit Video/Audio node:** a simple trim node. Drop in a video or audio clip, drag the in/out
+handles over its filmstrip/waveform, and pass just the trimmed segment downstream to the director or
+preview node.
+
+|               Edit Video/Audio node                |               Video Director node                |
+| :------------------------------------------------: | :----------------------------------------------: |
+| ![Edit Video/Audio node](screenshots/1.0.34.1.png) | ![Video Director node](screenshots/1.0.34.2.png) |
 
 ---
 
