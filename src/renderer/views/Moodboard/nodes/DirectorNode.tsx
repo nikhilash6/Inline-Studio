@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { mediaUrl } from '@shared/media'
 import type { DirectorClip } from '@shared/types'
 import { NodeFrame } from './NodeFrame'
@@ -60,7 +60,9 @@ function GutterDot({
 export function DirectorNode({ id, data, selected }: NodeProps): React.JSX.Element {
   const { name, previewUrl } = data as DirectorNodeData
   const connectors = useMoodboardStore((s) => s.connectors)
+  const items = useMoodboardStore((s) => s.items)
   const reloadBoard = useMoodboardStore((s) => s.load)
+  const { setCenter } = useReactFlow()
   const timeline = useTimelineStore((s) => s.timelineByOwner[id])
   const progress = useTimelineStore((s) => s.progressByOwner[id])
   const resolve = useTimelineStore((s) => s.resolve)
@@ -96,6 +98,7 @@ export function DirectorNode({ id, data, selected }: NodeProps): React.JSX.Eleme
   const l2 = timeline?.l2Volume ?? 1
   const video = timeline?.video ?? []
   const l2clips = timeline?.l2 ?? []
+  const hasClips = video.length > 0 || l2clips.length > 0
   const total = Math.max(layerEnd(video), layerEnd(l2clips), 0.001)
 
   // Re-resolve the derived timeline whenever the wired inputs change.
@@ -103,20 +106,28 @@ export function DirectorNode({ id, data, selected }: NodeProps): React.JSX.Eleme
     void resolve(id)
   }, [id, connSig, resolve])
 
-  // Debounced proxy rebuild when inputs or volumes change (only if a video is wired).
-  const hasVideoInput = incoming.some((c) =>
-    String(c.data?.targetHandle ?? '').startsWith(VIDEO_PREFIX),
-  )
+  // Debounced proxy rebuild when inputs or volumes change. Any input (video OR audio)
+  // is enough — an audio-only timeline renders over a black frame.
+  const hasInput = incoming.some((c) => {
+    const h = String(c.data?.targetHandle ?? '')
+    return h.startsWith(VIDEO_PREFIX) || h.startsWith(AUDIO_PREFIX)
+  })
   useEffect(() => {
-    if (!hasVideoInput) return
+    if (!hasInput) return
     const h = setTimeout(async () => {
       const ok = await buildPreview(id)
       if (ok) await reloadBoard()
     }, REBUILD_DEBOUNCE_MS)
     return () => clearTimeout(h)
-  }, [id, connSig, l1, l2, hasVideoInput, buildPreview, reloadBoard])
+  }, [id, connSig, l1, l2, hasInput, buildPreview, reloadBoard])
 
   const rendering = progress !== null && progress !== undefined
+
+  // Pan/zoom the canvas to a clip's source frame node (its "Frame X" tag click).
+  const navigateToFrame = (frameId: string): void => {
+    const it = items.find((i) => i.type === 'frame' && i.frameId === frameId)
+    if (it) void setCenter(it.x + it.width / 2, it.y + it.height / 2, { zoom: 1, duration: 400 })
+  }
 
   // Preview playhead synced to the proxy player.
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -164,7 +175,7 @@ export function DirectorNode({ id, data, selected }: NodeProps): React.JSX.Eleme
             )}
             <button
               onClick={() => void exportTimeline(id)}
-              disabled={rendering || video.length === 0}
+              disabled={rendering || !hasClips}
               className="nodrag rounded bg-accent px-1.5 py-0.5 text-[10px] text-panel hover:brightness-110 disabled:opacity-40"
             >
               Export
@@ -200,8 +211,8 @@ export function DirectorNode({ id, data, selected }: NodeProps): React.JSX.Eleme
               />
             ) : (
               <span className="absolute inset-0 flex items-center justify-center px-3 text-center text-[11px] text-zinc-500">
-                {video.length === 0
-                  ? 'Wire video frames into the V inputs on the left'
+                {!hasClips
+                  ? 'Wire frames into the V (video) or A (audio) inputs on the left'
                   : rendering
                     ? 'Rendering preview…'
                     : 'Building preview…'}
@@ -212,7 +223,7 @@ export function DirectorNode({ id, data, selected }: NodeProps): React.JSX.Eleme
           {/* Tracks */}
           <div className="nodrag relative flex-1 overflow-auto py-1.5">
             {/* Shared playhead across the tracks (aligned to the track lanes' inner width). */}
-            {video.length > 0 && (
+            {hasClips && (
               <div
                 className="pointer-events-none absolute inset-y-0 z-10 w-px bg-red-500"
                 style={{ left: `${(playhead * 100).toFixed(2)}%` }}
@@ -221,7 +232,13 @@ export function DirectorNode({ id, data, selected }: NodeProps): React.JSX.Eleme
 
             <TrackRow label="VIDEO">
               {video.map((c) => (
-                <ClipBlock key={c.key} clip={c} total={total} kind="video" />
+                <ClipBlock
+                  key={c.key}
+                  clip={c}
+                  total={total}
+                  kind="video"
+                  onNavigate={navigateToFrame}
+                />
               ))}
             </TrackRow>
 
@@ -279,10 +296,13 @@ function ClipBlock({
   clip,
   total,
   kind,
+  onNavigate,
 }: {
   clip: DirectorClip
   total: number
   kind: 'video' | 'audio'
+  /** Pan the canvas to the clip's source frame (only for frame-backed clips). */
+  onNavigate?: (frameId: string) => void
 }): React.JSX.Element {
   const width = `${(clip.duration / total) * 100}%`
   if (kind === 'audio') {
@@ -299,13 +319,36 @@ function ClipBlock({
       </div>
     )
   }
+
+  // Video/image clip: a filmstrip (video) or still (image) background, with a "Frame X" tag.
+  // Filmstrips repeat horizontally at full height; stills cover the clip.
+  const bg: React.CSSProperties = clip.thumbnail
+    ? {
+        width,
+        backgroundImage: `url(${mediaUrl(clip.thumbnail)})`,
+        backgroundSize: clip.kind === 'video' ? 'auto 100%' : 'cover',
+        backgroundRepeat: clip.kind === 'video' ? 'repeat-x' : 'no-repeat',
+        backgroundPosition: 'center',
+      }
+    : { width }
+
   return (
     <div
-      style={{ width }}
-      className="flex h-full items-center justify-center border-r border-black/40 bg-indigo-500/30 px-0.5"
+      style={bg}
+      className={`relative h-full overflow-hidden border-r border-black/40 ${clip.thumbnail ? 'bg-black/40' : 'bg-indigo-500/30'}`}
       title={`${clip.label} (${clip.duration.toFixed(1)}s)`}
     >
-      <span className="truncate text-[9px] text-indigo-100">{clip.label}</span>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          if (clip.frameId) onNavigate?.(clip.frameId)
+        }}
+        disabled={!clip.frameId}
+        title={clip.frameId ? `Go to Frame ${clip.label}` : clip.label}
+        className="nodrag absolute left-0.5 top-0.5 max-w-[calc(100%-4px)] truncate rounded bg-black/70 px-1 text-[9px] text-indigo-100 hover:bg-black/90 disabled:cursor-default"
+      >
+        Frame {clip.label}
+      </button>
     </div>
   )
 }

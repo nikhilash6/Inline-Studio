@@ -90,6 +90,17 @@ describe('buildComposeArgs', () => {
     expect(args.join(' ')).not.toContain('amix')
   })
 
+  it('renders an audio-only timeline over the black base (no video clips)', () => {
+    const args = buildComposeArgs(
+      [{ kind: 'audio', absPath: '/p/m.mp3', track: 1, startTime: 0, inPoint: 0, outPoint: 5 }],
+      SETTINGS,
+    )
+    const joined = args.join(' ')
+    expect(joined).toContain('color=c=black') // black video bed
+    expect(joined).toContain('-map 0:v') // mapped directly (no video clips to overlay)
+    expect(joined).toContain('-map [aout]') // the mixed audio
+  })
+
   it('applies a layer volume filter to a clip audio chain', () => {
     const args = buildComposeArgs(
       [videoClip({ hasAudio: true, muted: false, volume: 0.5 })],

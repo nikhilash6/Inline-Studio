@@ -35,6 +35,35 @@ export async function generatePoster(srcAbs: string, outAbs: string): Promise<bo
   return code === 0 && existsSync(outAbs)
 }
 
+/**
+ * Render a horizontal filmstrip PNG: `frames` evenly-spaced thumbnails tiled in one row,
+ * for the director timeline's video clips. Returns true on success.
+ */
+export async function generateFilmstrip(
+  srcAbs: string,
+  outAbs: string,
+  frames: number,
+  durationSec: number,
+): Promise<boolean> {
+  if (durationSec <= 0 || frames < 1) return false
+  // Sample `frames` frames across the clip, scale each to 160px wide, tile in a single row.
+  const fps = frames / durationSec
+  const { code } = await run(
+    [
+      '-y',
+      '-i',
+      srcAbs,
+      '-frames:v',
+      '1',
+      '-vf',
+      `fps=${fps.toFixed(4)},scale=160:-2,tile=${frames}x1`,
+      outAbs,
+    ],
+    120_000,
+  )
+  return code === 0 && existsSync(outAbs)
+}
+
 /** Read the first video stream's codec + pixel format (null if it can't be read). */
 export async function probeVideo(
   srcAbs: string,

@@ -140,6 +140,8 @@ export interface DirectorItemData {
 export interface DirectorClip {
   /** Stable key for React (the source frame/asset id). */
   key: string
+  /** Source frame id (for the "Frame X" tag + canvas navigation); null for asset clips. */
+  frameId: string | null
   /** Display label (frame name / asset name). */
   label: string
   kind: AssetKind
@@ -149,6 +151,8 @@ export interface DirectorClip {
   duration: number
   /** Project-relative waveform peaks JSON for this clip's audio, if any. */
   audioPeaks: string | null
+  /** Project-relative thumbnail: a filmstrip PNG for video, the still image for image clips. */
+  thumbnail: string | null
 }
 
 /** The derived, display-ready timeline for a director node (recomputed from connections). */

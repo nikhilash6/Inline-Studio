@@ -3,6 +3,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { mediaUrl, takeWaveformPath } from '@shared/media'
 import { useMoodboardStore } from '../../../store/moodboardStore'
 import { useFrameStore } from '../../../store/frameStore'
+import { useAssetStore } from '../../../store/assetStore'
 import { useMediaContextMenu } from '../../../lib/mediaContextMenu'
 import { Waveform } from '../../../components/Waveform'
 import { NodeFrame } from './NodeFrame'
@@ -17,7 +18,9 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
   const items = useMoodboardStore((s) => s.items)
   const frames = useFrameStore((s) => s.frames)
   const takesByFrame = useFrameStore((s) => s.takesByFrame)
+  const inputsByFrame = useFrameStore((s) => s.inputsByFrame)
   const setHero = useFrameStore((s) => s.setHero)
+  const assets = useAssetStore((s) => s.assets)
   const onMediaContextMenu = useMediaContextMenu()
   const [idx, setIdx] = useState(0)
 
@@ -42,6 +45,31 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
   const makeHero = (): void => {
     if (frame && cur && !curIsHero) void setHero(frame.id, cur.id)
   }
+
+  // When the frame has no takes yet (e.g. an imported frame with no workflow), fall back
+  // to its input asset so the preview still shows the contained media.
+  const fallbackAsset = (() => {
+    if (cur || !frame) return null
+    const input = (inputsByFrame[frame.id] ?? []).find((i) => i.assetId)
+    return input?.assetId ? (assets.find((a) => a.id === input.assetId) ?? null) : null
+  })()
+
+  // Unified media to render: the current take, or the fallback input asset.
+  const display = cur
+    ? {
+        src: mediaUrl(cur.filePath),
+        saveSrc: mediaUrl(cur.filePath),
+        kind: cur.kind,
+        waveform: mediaUrl(takeWaveformPath(cur.id)),
+      }
+    : fallbackAsset
+      ? {
+          src: mediaUrl(fallbackAsset.previewPath ?? fallbackAsset.filePath),
+          saveSrc: mediaUrl(fallbackAsset.filePath),
+          kind: fallbackAsset.kind,
+          waveform: fallbackAsset.thumbPath ? mediaUrl(fallbackAsset.thumbPath) : null,
+        }
+      : null
 
   return (
     <>
@@ -73,32 +101,29 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
             )}
           </div>
           <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
-            {cur ? (
-              cur.kind === 'video' ? (
+            {display ? (
+              display.kind === 'video' ? (
                 <video
-                  src={mediaUrl(cur.filePath)}
+                  src={display.src}
                   controls
                   onContextMenu={(e) =>
                     onMediaContextMenu(e, {
-                      src: mediaUrl(cur.filePath),
+                      src: display.saveSrc,
                       name: frame ? `Frame ${frame.name}` : 'take',
                       kind: 'video',
                     })
                   }
                   className="max-h-full max-w-full object-contain"
                 />
-              ) : cur.kind === 'audio' ? (
+              ) : display.kind === 'audio' ? (
                 <div className="flex h-full w-full flex-col justify-center gap-2 px-3">
-                  <Waveform
-                    url={mediaUrl(takeWaveformPath(cur.id))}
-                    className="h-16 w-full text-emerald-400"
-                  />
+                  <Waveform url={display.waveform} className="h-16 w-full text-emerald-400" />
                   <audio
-                    src={mediaUrl(cur.filePath)}
+                    src={display.src}
                     controls
                     onContextMenu={(e) =>
                       onMediaContextMenu(e, {
-                        src: mediaUrl(cur.filePath),
+                        src: display.saveSrc,
                         name: frame ? `Frame ${frame.name}` : 'take',
                         kind: 'audio',
                       })
@@ -108,13 +133,13 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
                 </div>
               ) : (
                 <img
-                  src={mediaUrl(cur.filePath)}
+                  src={display.src}
                   alt=""
                   onContextMenu={(e) =>
                     onMediaContextMenu(e, {
-                      src: mediaUrl(cur.filePath),
+                      src: display.saveSrc,
                       name: frame ? `Frame ${frame.name}` : 'take',
-                      kind: cur.kind,
+                      kind: display.kind,
                     })
                   }
                   className="max-h-full max-w-full object-contain"
@@ -123,7 +148,7 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
             ) : (
               <span className="p-3 text-center text-[11px] text-zinc-500">
                 {frame
-                  ? 'No outputs yet — generate this frame in ComfyUI.'
+                  ? 'No outputs yet — generate this frame, or it shows its input.'
                   : "Connect a frame's output here to preview it"}
               </span>
             )}

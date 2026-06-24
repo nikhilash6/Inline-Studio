@@ -225,9 +225,33 @@ export function addSourceInput(frameId: string, sourceFrameId: string): FrameInp
 }
 
 /**
- * The file path + basename of a frame's output take to feed downstream — the hero
- * take, or (when no hero is set) the newest take, mirroring what the Preview shows.
- * Null if the frame has no takes yet.
+ * A frame's first input asset (the imported source it was created from), resolved to a
+ * file + kind. This is a frame's output when it has no takes yet — an imported frame
+ * doesn't need a workflow; it passes its own asset through until it's generated.
+ */
+function firstInputAsset(
+  frameId: string,
+): { filePath: string; kind: AssetKind; name: string } | null {
+  const db = getDb()
+  for (const row of frameInputRows(frameId)) {
+    if (!row.asset_id) continue
+    const a = db.prepare('SELECT file_path, kind FROM assets WHERE id = ?').get(row.asset_id) as
+      | { file_path: string; kind: AssetKind }
+      | undefined
+    if (a)
+      return {
+        filePath: a.file_path,
+        kind: a.kind,
+        name: a.file_path.split('/').pop() ?? a.file_path,
+      }
+  }
+  return null
+}
+
+/**
+ * The file path + basename of a frame's output to feed downstream — the hero take, the
+ * newest take, or (when the frame has never been generated) its imported input asset.
+ * Null only if the frame has neither a take nor an asset input.
  */
 function heroTakeFile(frameId: string): { filePath: string; name: string } | null {
   const db = getDb()
@@ -244,11 +268,15 @@ function heroTakeFile(frameId: string): { filePath: string; name: string } | nul
       .prepare('SELECT file_path FROM takes WHERE frame_id = ? ORDER BY created_at DESC LIMIT 1')
       .get(frameId) as { file_path: string } | undefined
   }
-  if (!tk) return null
-  return { filePath: tk.file_path, name: tk.file_path.split('/').pop() ?? tk.file_path }
+  if (tk) return { filePath: tk.file_path, name: tk.file_path.split('/').pop() ?? tk.file_path }
+  const input = firstInputAsset(frameId)
+  return input ? { filePath: input.filePath, name: input.name } : null
 }
 
-/** Resolve a frame's output (hero take, else newest) to a relative path + kind, for the director timeline. */
+/**
+ * Resolve a frame's output (hero take, else newest take, else its imported input asset)
+ * to a relative path + kind, for the director timeline.
+ */
 export function resolveFrameOutput(frameId: string): { filePath: string; kind: AssetKind } | null {
   const db = getDb()
   const fr = db.prepare('SELECT hero_take_id FROM frames WHERE id = ?').get(frameId) as
@@ -266,7 +294,9 @@ export function resolveFrameOutput(frameId: string): { filePath: string; kind: A
       )
       .get(frameId) as { file_path: string; kind: AssetKind } | undefined
   }
-  return tk ? { filePath: tk.file_path, kind: tk.kind } : null
+  if (tk) return { filePath: tk.file_path, kind: tk.kind }
+  const input = firstInputAsset(frameId)
+  return input ? { filePath: input.filePath, kind: input.kind } : null
 }
 
 export async function importAsFrames(): Promise<Frame[]> {

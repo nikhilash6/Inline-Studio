@@ -20,10 +20,11 @@ import { getOpenProjectFolder } from '../db'
 import { listBoard, getMoodboardItem } from '../moodboard/store'
 import { resolveFrameOutput, getFrameById } from '../frames/store'
 import { assetFile } from '../assets/store'
-import { ffmpegAvailable, probeMedia, generatePeaks } from '../media/ffmpeg'
+import { ffmpegAvailable, probeMedia, generatePeaks, generateFilmstrip } from '../media/ffmpeg'
 import type { ResolvedClip } from '../export/compose'
 
 const STILL_SECONDS = 4
+const FILMSTRIP_FRAMES = 8
 const VIDEO_PREFIX = 'vin-'
 const AUDIO_PREFIX = 'ain-'
 
@@ -35,6 +36,8 @@ export interface ResolvedTimeline {
 interface SourceRef {
   /** Stable id (frame/asset) for the clip key. */
   sourceId: string
+  /** Source frame id (for the "Frame X" tag + navigation), or null for asset sources. */
+  frameId: string | null
   /** Project-relative media path. */
   filePath: string
   kind: AssetKind
@@ -58,7 +61,13 @@ function resolveSourceRef(
     const out = resolveFrameOutput(fromItem.frameId)
     if (!out) return null
     const label = safeFrameName(fromItem.frameId)
-    return { sourceId: fromItem.frameId, filePath: out.filePath, kind: out.kind, label }
+    return {
+      sourceId: fromItem.frameId,
+      frameId: fromItem.frameId,
+      filePath: out.filePath,
+      kind: out.kind,
+      label,
+    }
   }
   if (fromItem.type === 'preview') {
     const feed = connectors.find((k) => k.toItemId === fromItem.id)
@@ -68,6 +77,7 @@ function resolveSourceRef(
       if (!out) return null
       return {
         sourceId: feedFrame.frameId,
+        frameId: feedFrame.frameId,
         filePath: out.filePath,
         kind: out.kind,
         label: safeFrameName(feedFrame.frameId),
@@ -78,7 +88,13 @@ function resolveSourceRef(
   if (fromItem.type === 'asset' && fromItem.assetId) {
     const a = assetFile(fromItem.assetId)
     if (!a) return null
-    return { sourceId: fromItem.assetId, filePath: a.filePath, kind: a.kind, label: a.name }
+    return {
+      sourceId: fromItem.assetId,
+      frameId: null,
+      filePath: a.filePath,
+      kind: a.kind,
+      label: a.name,
+    }
   }
   return null
 }
@@ -148,13 +164,32 @@ export async function resolveTimeline(ownerItemId: string): Promise<ResolvedTime
         if (existsSync(join(folder, peaksRel))) audioPeaks = peaksRel
       }
 
+      // A thumbnail: a filmstrip PNG for video clips, the still itself for image clips.
+      let thumbnail: string | null = null
+      if (ref.kind === 'video' && ffmpegAvailable()) {
+        const stripRel = `thumbs/strip-${fileKey(ref.filePath)}.png`
+        if (!existsSync(join(folder, stripRel))) {
+          await generateFilmstrip(
+            absPath,
+            join(folder, stripRel),
+            FILMSTRIP_FRAMES,
+            duration,
+          ).catch(() => false)
+        }
+        if (existsSync(join(folder, stripRel))) thumbnail = stripRel
+      } else if (ref.kind === 'image') {
+        thumbnail = ref.filePath
+      }
+
       const clip: DirectorClip = {
         key: ref.sourceId,
+        frameId: ref.frameId,
         label: ref.label,
         kind: ref.kind,
         startTime: cursor,
         duration,
         audioPeaks,
+        thumbnail,
       }
       if (track === 0) display.video.push(clip)
       else display.l2.push(clip)

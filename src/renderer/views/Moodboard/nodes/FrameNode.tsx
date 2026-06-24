@@ -63,6 +63,7 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
   const addInputs = useFrameStore((s) => s.addInputs)
   const allFrames = useFrameStore((s) => s.frames)
   const takesByFrame = useFrameStore((s) => s.takesByFrame)
+  const inputsByFrame = useFrameStore((s) => s.inputsByFrame)
   const assets = useAssetStore((s) => s.assets)
   const item = useMoodboardStore((s) => s.items.find((it) => it.id === id))
   const updateItem = useMoodboardStore((s) => s.updateItem)
@@ -105,14 +106,36 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
         const takes = sf ? (takesByFrame[sf.id] ?? []) : []
         // Mirror the Preview: the hero take, or the newest when no hero is set.
         const take = takes.find((t) => t.id === sf?.heroTakeId) ?? takes[0]
-        return take
+        if (take) {
+          return {
+            id: i.id,
+            assetId: null,
+            url: mediaUrl(take.filePath),
+            saveSrc: mediaUrl(take.filePath),
+            kind: take.kind,
+            waveform: take.kind === 'audio' ? mediaUrl(takeWaveformPath(take.id)) : undefined,
+          }
+        }
+        // No take yet — fall back to the source frame's imported input asset.
+        const srcInput = sf ? (inputsByFrame[sf.id] ?? []).find((x) => x.assetId) : undefined
+        const srcAsset = srcInput?.assetId
+          ? assets.find((a) => a.id === srcInput.assetId)
+          : undefined
+        return srcAsset
           ? {
               id: i.id,
               assetId: null,
-              url: mediaUrl(take.filePath),
-              saveSrc: mediaUrl(take.filePath),
-              kind: take.kind,
-              waveform: take.kind === 'audio' ? mediaUrl(takeWaveformPath(take.id)) : undefined,
+              url: mediaUrl(srcAsset.previewPath ?? srcAsset.filePath),
+              saveSrc: mediaUrl(srcAsset.filePath),
+              kind: srcAsset.kind,
+              poster:
+                srcAsset.kind === 'video' && srcAsset.thumbPath
+                  ? mediaUrl(srcAsset.thumbPath)
+                  : undefined,
+              waveform:
+                srcAsset.kind === 'audio' && srcAsset.thumbPath
+                  ? mediaUrl(srcAsset.thumbPath)
+                  : undefined,
             }
           : null
       }

@@ -20,7 +20,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { mediaUrl } from '@shared/media'
-import type { MoodboardItem, MoodboardConnector, TextItemData } from '@shared/types'
+import type { MoodboardItem, MoodboardConnector, TextItemData, Frame, Asset } from '@shared/types'
 import { useMoodboardStore } from '../../store/moodboardStore'
 import { useAssetStore } from '../../store/assetStore'
 import { useFrameStore } from '../../store/frameStore'
@@ -115,6 +115,36 @@ function visualEdgeColors(connectors: MoodboardConnector[]): Map<string, string>
   return colors
 }
 
+/** Parse the slot index from a director handle id (e.g. "vin-3" → 3), or null. */
+function slotIndex(handle: string | undefined, prefix: string): number | null {
+  if (typeof handle !== 'string' || !handle.startsWith(prefix)) return null
+  const n = Number(handle.slice(prefix.length))
+  return Number.isFinite(n) ? n : null
+}
+
+/** The media kind feeding a director input (frame kind / asset kind / preview's frame). */
+function directorInputKind(
+  src: MoodboardItem | undefined,
+  items: MoodboardItem[],
+  connectors: MoodboardConnector[],
+  frames: Frame[],
+  assets: Asset[],
+): 'image' | 'video' | 'audio' {
+  if (!src) return 'video'
+  if (src.type === 'asset' && src.assetId) {
+    return assets.find((a) => a.id === src.assetId)?.kind ?? 'video'
+  }
+  if (src.type === 'frame' && src.frameId) {
+    return frames.find((f) => f.id === src.frameId)?.kind ?? 'video'
+  }
+  if (src.type === 'preview') {
+    const feed = connectors.find((k) => k.toItemId === src.id)
+    const ff = feed ? items.find((it) => it.id === feed.fromItemId) : undefined
+    return ff?.frameId ? (frames.find((f) => f.id === ff.frameId)?.kind ?? 'video') : 'video'
+  }
+  return 'video'
+}
+
 const FALLBACK_TEXT: TextItemData = {
   text: '',
   fontSize: 18,
@@ -148,6 +178,7 @@ function Board(): React.JSX.Element {
   const undo = useMoodboardStore((s) => s.undo)
   const redo = useMoodboardStore((s) => s.redo)
   const addSourceInput = useFrameStore((s) => s.addSourceInput)
+  const frames = useFrameStore((s) => s.frames)
   const assets = useAssetStore((s) => s.assets)
   const loadAssets = useAssetStore((s) => s.load)
   const loadFrames = useFrameStore((s) => s.load)
@@ -288,13 +319,33 @@ function Board(): React.JSX.Element {
 
   const onConnect = (c: Connection): void => {
     if (!c.source || !c.target || c.source === c.target) return
+    const src = items.find((it) => it.id === c.source)
+    const tgt = items.find((it) => it.id === c.target)
+
+    // Director input: auto-assign the next free slot on the matching layer (by source
+    // kind), so wiring grows without the user having to hit a specific tiny handle dot —
+    // and the inputs keep increasing one-by-one as they fill.
+    if (tgt?.type === 'director') {
+      const prefix =
+        directorInputKind(src, items, connectors, frames, assets) === 'audio' ? 'ain-' : 'vin-'
+      const used = new Set(
+        connectors
+          .filter((k) => k.toItemId === tgt.id)
+          .map((k) => slotIndex(k.data?.targetHandle as string | undefined, prefix))
+          .filter((n): n is number => n !== null),
+      )
+      const explicit = slotIndex(c.targetHandle ?? undefined, prefix)
+      let s = explicit !== null && !used.has(explicit) ? explicit : 0
+      while (used.has(s)) s++
+      void connect(c.source, tgt.id, c.sourceHandle ?? 'out', `${prefix}${s}`)
+      return
+    }
+
     void connect(c.source, c.target, c.sourceHandle ?? null, c.targetHandle ?? null)
 
     // Preview output → Frame input: also wire the data link. The frame takes the
     // preview's source frame (whoever feeds the preview) as a live input — resolved
     // to that frame's hero take at generate time.
-    const src = items.find((it) => it.id === c.source)
-    const tgt = items.find((it) => it.id === c.target)
     if (
       src?.type === 'preview' &&
       tgt?.type === 'frame' &&
