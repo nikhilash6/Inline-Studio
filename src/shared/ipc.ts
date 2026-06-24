@@ -15,6 +15,8 @@ import type {
   MoodboardConnector,
   MoodboardSnapshot,
   MoodboardItemData,
+  DirectorTimeline,
+  TimelineProgressEvent,
   Frame,
   Take,
   FrameInput,
@@ -116,12 +118,19 @@ export const IpcChannels = {
     addFrameItem: 'moodboard:addFrameItem',
     addPreview: 'moodboard:addPreview',
     addLayer: 'moodboard:addLayer',
+    addDirector: 'moodboard:addDirector',
     updateItem: 'moodboard:updateItem',
     deleteItem: 'moodboard:deleteItem',
     importAndPlace: 'moodboard:importAndPlace',
     createConnector: 'moodboard:createConnector',
     deleteConnector: 'moodboard:deleteConnector',
     replaceBoard: 'moodboard:replaceBoard',
+  },
+  timeline: {
+    resolve: 'timeline:resolve',
+    setVolumes: 'timeline:setVolumes',
+    buildPreview: 'timeline:buildPreview',
+    export: 'timeline:export',
   },
   dialog: {
     pickDirectory: 'dialog:pickDirectory',
@@ -147,6 +156,8 @@ export const IpcChannels = {
     claudeProposal: 'events:claudeProposal',
     claudeDone: 'events:claudeDone',
     claudeError: 'events:claudeError',
+    /** Main → renderer: director timeline render progress. */
+    timelineProgress: 'events:timelineProgress',
     /** Main → renderer: auto-update lifecycle. */
     updateAvailable: 'events:updateAvailable',
     updateProgress: 'events:updateProgress',
@@ -319,6 +330,8 @@ export interface InlineStudioApi {
     addPreview(x: number, y: number): Promise<Result<MoodboardItem>>
     /** Add a resizable layer group container at (x, y). */
     addLayer(x: number, y: number): Promise<Result<MoodboardItem>>
+    /** Add a video-director node (timeline-in-a-node) at (x, y). */
+    addDirector(x: number, y: number): Promise<Result<MoodboardItem>>
     updateItem(id: string, patch: MoodboardItemPatch): Promise<Result<MoodboardItem>>
     deleteItem(id: string): Promise<Result<void>>
     /** Import media into the shared library AND place it on the board near (x, y). */
@@ -332,6 +345,18 @@ export interface InlineStudioApi {
     deleteConnector(id: string): Promise<Result<void>>
     /** Replace the entire board (used by canvas undo/redo). */
     replaceBoard(items: MoodboardItem[], connectors: MoodboardConnector[]): Promise<Result<void>>
+  }
+  timeline: {
+    /** The derived timeline (video + L2 audio + volumes) for a director node. */
+    resolve(ownerItemId: string): Promise<Result<DirectorTimeline>>
+    /** Set the L1/L2 layer volumes (0..1) on a director node. */
+    setVolumes(ownerItemId: string, l1Volume: number, l2Volume: number): Promise<Result<void>>
+    /** Render a low-res proxy preview; returns its project-relative path (null if empty). */
+    buildPreview(ownerItemId: string): Promise<Result<string | null>>
+    /** Export the timeline to a user-chosen MP4; returns the path written (null if cancelled). */
+    export(ownerItemId: string): Promise<Result<string | null>>
+    /** Subscribe to render progress (0..1). Returns an unsubscribe fn. */
+    onProgress(cb: (e: TimelineProgressEvent) => void): () => void
   }
   dialog: {
     /** Native folder picker; returns the chosen absolute path or null if cancelled. */

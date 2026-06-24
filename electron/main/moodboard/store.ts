@@ -107,6 +107,24 @@ function getItem(id: string): MoodboardItem {
   return rowToItem(row)
 }
 
+/** Read a moodboard item by id (e.g. a director node's settings). */
+export function getMoodboardItem(id: string): MoodboardItem {
+  return getItem(id)
+}
+
+/** All connectors whose target is `itemId` (e.g. inputs wired into a director node). */
+export function listConnectorsTo(itemId: string): MoodboardConnector[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM moodboard_connectors WHERE to_item_id = ?')
+    .all(itemId) as ConnectorRow[]
+  return rows.map(rowToConnector)
+}
+
+/** Read all moodboard items (for resolving connector sources). */
+export function listItems(): MoodboardItem[] {
+  return (getDb().prepare('SELECT * FROM moodboard_items').all() as ItemRow[]).map(rowToItem)
+}
+
 function nextZIndex(): number {
   const row = getDb().prepare('SELECT MAX(z_index) AS z FROM moodboard_items').get() as {
     z: number | null
@@ -282,6 +300,29 @@ export function addPreview(x: number, y: number): MoodboardItem {
     y,
     width: 280,
     height: 220,
+    rotation: 0,
+    zIndex: nextZIndex(),
+    createdAt: now,
+    updatedAt: now,
+  })
+}
+
+/** Add a video-director node (a timeline-in-a-node: preview + video/audio tracks). */
+export function addDirector(x: number, y: number): MoodboardItem {
+  const now = Date.now()
+  return insertItem({
+    id: randomUUID(),
+    projectId: projectId(),
+    type: 'director',
+    assetId: null,
+    frameId: null,
+    parentId: null,
+    data: { name: 'Director', director: { width: 1920, height: 1080, fps: 30 } },
+    x,
+    y,
+    // 2× a normal frame node (220×200) so the in-node timeline has room.
+    width: 440,
+    height: 400,
     rotation: 0,
     zIndex: nextZIndex(),
     createdAt: now,

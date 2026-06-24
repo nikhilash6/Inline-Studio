@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { mediaUrl } from '@shared/media'
+import { mediaUrl, takeWaveformPath } from '@shared/media'
 import { useFrameStore } from '../../../store/frameStore'
 import { useAssetStore } from '../../../store/assetStore'
 import { useMoodboardStore } from '../../../store/moodboardStore'
@@ -8,6 +8,7 @@ import { useUiStore } from '../../../store/uiStore'
 import { getAssetDragIds } from '../../../lib/dnd'
 import { useMediaContextMenu } from '../../../lib/mediaContextMenu'
 import { VideoPreview } from '../../../components/VideoPreview'
+import { Waveform } from '../../../components/Waveform'
 import { NodeFrame } from './NodeFrame'
 
 interface FrameNodeData extends Record<string, unknown> {
@@ -24,6 +25,8 @@ type Thumb = {
   kind: 'image' | 'video' | 'audio'
   /** Poster image for a video, so it renders even when the codec can't be decoded. */
   poster?: string
+  /** Waveform peaks JSON URL, for audio inputs/takes. */
+  waveform?: string
 }
 
 // Bounds for the media body when fitting to a media's aspect ratio — keeps very
@@ -93,7 +96,8 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
           // Save the original file, not the transcoded preview.
           saveSrc: mediaUrl(a.filePath),
           kind: a.kind,
-          poster: a.thumbPath ? mediaUrl(a.thumbPath) : undefined,
+          poster: a.kind === 'video' && a.thumbPath ? mediaUrl(a.thumbPath) : undefined,
+          waveform: a.kind === 'audio' && a.thumbPath ? mediaUrl(a.thumbPath) : undefined,
         }
       }
       if (i.sourceFrameId) {
@@ -108,6 +112,7 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
               url: mediaUrl(take.filePath),
               saveSrc: mediaUrl(take.filePath),
               kind: take.kind,
+              waveform: take.kind === 'audio' ? mediaUrl(takeWaveformPath(take.id)) : undefined,
             }
           : null
       }
@@ -269,7 +274,9 @@ export function FrameNode({ id, data, selected }: NodeProps): React.JSX.Element 
                   className="h-full w-full object-cover"
                 />
               ) : cur.kind === 'audio' ? (
-                <span className="text-2xl">🎵</span>
+                <div className="flex h-full w-full items-center px-2">
+                  <Waveform url={cur.waveform ?? null} className="h-1/2 w-full text-emerald-400" />
+                </div>
               ) : (
                 <img
                   src={cur.url}

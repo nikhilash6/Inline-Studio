@@ -3,6 +3,7 @@
 **An experimentation layer for visual artists. Build, iterate, and share generative pipelines on your own [ComfyUI](https://github.com/comfyanonymous/ComfyUI).**
 
 [![Join our Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white&style=for-the-badge)](https://discord.gg/cSUS88VdY9)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ComfyUI is the most capable generative engine going: image, video, audio, LLM, every new model lands there first. But generating is the easy part. The work that matters is what comes after: exploring options, keeping what's good, and shaping a repeatable process out of it. Inline Studio is the layer where that happens. It gives visual artists a free-form node canvas to experiment on, holds every version that worked, and grows a single render into a pipeline you can iterate on and share, while your own ComfyUI does the rendering behind each shot.
 

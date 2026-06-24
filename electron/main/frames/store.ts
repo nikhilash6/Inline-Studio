@@ -7,8 +7,10 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { existsSync, unlinkSync, mkdirSync, copyFileSync } from 'node:fs'
 import type { Frame, Take, FrameInput, FrameKind, AssetKind } from '@shared/types'
+import { takeWaveformPath } from '@shared/media'
 import { getDb, getOpenProjectFolder } from '../db'
 import { importViaDialog } from '../assets/store'
+import { ffmpegAvailable, generatePeaks } from '../media/ffmpeg'
 
 interface FrameRow {
   id: string
@@ -120,7 +122,6 @@ export function listFrames(): Frame[] {
 }
 
 function createFrame(asset: { id: string; kind: AssetKind }): Frame {
-  if (asset.kind === 'audio') throw new Error('A frame must be an image or video, not audio.')
   const db = getDb()
   const seqId = defaultSequenceId()
   const count = (
@@ -247,11 +248,30 @@ function heroTakeFile(frameId: string): { filePath: string; name: string } | nul
   return { filePath: tk.file_path, name: tk.file_path.split('/').pop() ?? tk.file_path }
 }
 
+/** Resolve a frame's output (hero take, else newest) to a relative path + kind, for the director timeline. */
+export function resolveFrameOutput(frameId: string): { filePath: string; kind: AssetKind } | null {
+  const db = getDb()
+  const fr = db.prepare('SELECT hero_take_id FROM frames WHERE id = ?').get(frameId) as
+    | { hero_take_id: string | null }
+    | undefined
+  let tk = fr?.hero_take_id
+    ? (db.prepare('SELECT file_path, kind FROM takes WHERE id = ?').get(fr.hero_take_id) as
+        | { file_path: string; kind: AssetKind }
+        | undefined)
+    : undefined
+  if (!tk) {
+    tk = db
+      .prepare(
+        'SELECT file_path, kind FROM takes WHERE frame_id = ? ORDER BY created_at DESC LIMIT 1',
+      )
+      .get(frameId) as { file_path: string; kind: AssetKind } | undefined
+  }
+  return tk ? { filePath: tk.file_path, kind: tk.kind } : null
+}
+
 export async function importAsFrames(): Promise<Frame[]> {
   const assets = await importViaDialog(null)
-  return assets
-    .filter((a) => a.kind !== 'audio')
-    .map((a) => createFrame({ id: a.id, kind: a.kind }))
+  return assets.map((a) => createFrame({ id: a.id, kind: a.kind }))
 }
 
 export function renameFrame(id: string, name: string): Frame {
@@ -462,6 +482,17 @@ export function addTake(input: {
       now,
     )
   setHero(input.frameId, id)
+  // Background: render a waveform for audio takes (by convention, keyed on take id).
+  if (input.kind === 'audio' && ffmpegAvailable()) {
+    const folder = getOpenProjectFolder()
+    if (folder) {
+      void generatePeaks(join(folder, input.filePath), join(folder, takeWaveformPath(id))).catch(
+        () => {
+          /* ignore — the player still works without a waveform */
+        },
+      )
+    }
+  }
   return {
     id,
     frameId: input.frameId,

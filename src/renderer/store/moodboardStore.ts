@@ -46,6 +46,7 @@ interface MoodboardState {
   /** Add a Preview node. Returns the new item (for connection-drop suggestions). */
   addPreview: (x: number, y: number) => Promise<MoodboardItem | null>
   addLayer: (x: number, y: number) => Promise<void>
+  addDirector: (x: number, y: number) => Promise<MoodboardItem | null>
   /** Place an existing asset on the board, parented to a layer when given. */
   addFrameFromAssetInLayer: (
     assetId: string,
@@ -124,6 +125,9 @@ async function copyOne(
       break
     case 'layer':
       res = await m.addLayer(x, y)
+      break
+    case 'director':
+      res = await m.addDirector(x, y)
       break
     default:
       return null
@@ -311,6 +315,22 @@ export const useMoodboardStore = create<MoodboardState>((set, get) => ({
       set((s) => ({ items: [...s.items, res.value] }))
     } catch (e) {
       set({ error: ipcErrorMessage(e) })
+    }
+  },
+
+  addDirector: async (x, y) => {
+    try {
+      get().record()
+      const res = await window.inlineStudio.moodboard.addDirector(x, y)
+      if (!res.ok) {
+        set({ error: res.error })
+        return null
+      }
+      set((s) => ({ items: [...s.items, res.value] }))
+      return res.value
+    } catch (e) {
+      set({ error: ipcErrorMessage(e) })
+      return null
     }
   },
 

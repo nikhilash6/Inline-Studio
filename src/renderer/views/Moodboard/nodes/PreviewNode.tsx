@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { mediaUrl } from '@shared/media'
+import { mediaUrl, takeWaveformPath } from '@shared/media'
 import { useMoodboardStore } from '../../../store/moodboardStore'
 import { useFrameStore } from '../../../store/frameStore'
 import { useMediaContextMenu } from '../../../lib/mediaContextMenu'
+import { Waveform } from '../../../components/Waveform'
 import { NodeFrame } from './NodeFrame'
 
 /**
@@ -86,6 +87,25 @@ export function PreviewNode({ id, selected }: NodeProps): React.JSX.Element {
                   }
                   className="max-h-full max-w-full object-contain"
                 />
+              ) : cur.kind === 'audio' ? (
+                <div className="flex h-full w-full flex-col justify-center gap-2 px-3">
+                  <Waveform
+                    url={mediaUrl(takeWaveformPath(cur.id))}
+                    className="h-16 w-full text-emerald-400"
+                  />
+                  <audio
+                    src={mediaUrl(cur.filePath)}
+                    controls
+                    onContextMenu={(e) =>
+                      onMediaContextMenu(e, {
+                        src: mediaUrl(cur.filePath),
+                        name: frame ? `Frame ${frame.name}` : 'take',
+                        kind: 'audio',
+                      })
+                    }
+                    className="nodrag w-full"
+                  />
+                </div>
               ) : (
                 <img
                   src={mediaUrl(cur.filePath)}

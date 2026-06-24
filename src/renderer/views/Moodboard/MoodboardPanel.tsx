@@ -24,6 +24,7 @@ import type { MoodboardItem, MoodboardConnector, TextItemData } from '@shared/ty
 import { useMoodboardStore } from '../../store/moodboardStore'
 import { useAssetStore } from '../../store/assetStore'
 import { useFrameStore } from '../../store/frameStore'
+import { useTimelineStore } from '../../store/timelineStore'
 import { useUiStore } from '../../store/uiStore'
 import { useClaudeStore } from '../../store/claudeStore'
 import { ClaudeLogo } from '../../components/ClaudeLogo'
@@ -35,6 +36,7 @@ import { TextNode } from './nodes/TextNode'
 import { FrameNode } from './nodes/FrameNode'
 import { PreviewNode } from './nodes/PreviewNode'
 import { LayerNode } from './nodes/LayerNode'
+import { DirectorNode } from './nodes/DirectorNode'
 import { DeletableEdge } from './edges/DeletableEdge'
 import { SideMenu } from './SideMenu'
 import { CanvasToolbar } from './CanvasToolbar'
@@ -48,6 +50,7 @@ const nodeTypes: NodeTypes = {
   frame: FrameNode,
   preview: PreviewNode,
   layer: LayerNode,
+  director: DirectorNode,
 }
 
 const edgeTypes: EdgeTypes = {
@@ -139,6 +142,7 @@ function Board(): React.JSX.Element {
   const addFrameItemInLayer = useMoodboardStore((s) => s.addFrameItemInLayer)
   const addPreview = useMoodboardStore((s) => s.addPreview)
   const addLayer = useMoodboardStore((s) => s.addLayer)
+  const addDirector = useMoodboardStore((s) => s.addDirector)
   const addEmptyFrame = useMoodboardStore((s) => s.addEmptyFrame)
   const duplicateItems = useMoodboardStore((s) => s.duplicateItems)
   const undo = useMoodboardStore((s) => s.undo)
@@ -176,6 +180,13 @@ function Board(): React.JSX.Element {
   useEffect(() => {
     setNodes(toNodes(items, assetsById))
   }, [items, assetsById, setNodes])
+
+  // Director render progress (main → renderer) drives the editor + node progress UI.
+  useEffect(() => {
+    return window.inlineStudio.timeline.onProgress((e) => {
+      useTimelineStore.getState().setProgress(e.ownerItemId, e.fraction >= 1 ? null : e.fraction)
+    })
+  }, [])
 
   // Edges are managed by useEdgesState (so selection/hover changes apply via
   // onEdgesChange) but kept in sync with the persisted connectors.
@@ -296,6 +307,8 @@ function Board(): React.JSX.Element {
         : undefined
       if (sourceFrameId) void addSourceInput(tgt.frameId, sourceFrameId)
     }
+    // Wiring into a Director node's input handle just persists the connector (above); the
+    // node derives its video/audio layers from its connections reactively.
   }
 
   // Dropping an OUTPUT link on empty canvas suggests what to create next (preview/frame).
@@ -523,6 +536,10 @@ function Board(): React.JSX.Element {
             const { x, y } = centre()
             void addPreview(x, y)
           }}
+          onAddDirector={() => {
+            const { x, y } = centre()
+            void addDirector(x, y)
+          }}
           onAddText={() => {
             const { x, y } = centre()
             void addTextAt(x, y)
@@ -619,7 +636,10 @@ function EmptyCanvasHint(): React.JSX.Element {
 /** Map items to React Flow nodes — layers first so they precede their children. */
 function toNodes(
   items: MoodboardItem[],
-  assetsById: Map<string, { filePath: string; kind: string; name: string }>,
+  assetsById: Map<
+    string,
+    { filePath: string; kind: string; name: string; thumbPath?: string | null }
+  >,
 ): Node[] {
   const ordered = [...items].sort(
     (a, b) => (a.type === 'layer' ? -1 : 0) - (b.type === 'layer' ? -1 : 0),
@@ -629,7 +649,10 @@ function toNodes(
 
 function itemToNode(
   item: MoodboardItem,
-  assetsById: Map<string, { filePath: string; kind: string; name: string }>,
+  assetsById: Map<
+    string,
+    { filePath: string; kind: string; name: string; thumbPath?: string | null }
+  >,
 ): Node {
   const common: Node = {
     id: item.id,
@@ -652,11 +675,20 @@ function itemToNode(
   if (item.type === 'preview') {
     return { ...common, type: 'preview', data: {} }
   }
+  if (item.type === 'director') {
+    return {
+      ...common,
+      type: 'director',
+      data: { name: item.data.name ?? 'Director', previewUrl: item.data.directorPreview },
+    }
+  }
   if (item.type === 'text') {
     return { ...common, type: 'text', data: { text: item.data.text ?? FALLBACK_TEXT } }
   }
   const asset = item.assetId ? assetsById.get(item.assetId) : undefined
   const src = asset ? mediaUrl(asset.filePath) : ''
   const type = asset?.kind === 'video' ? 'video' : asset?.kind === 'audio' ? 'audio' : 'image'
-  return { ...common, type, data: { src, name: asset?.name ?? '' } }
+  const waveform =
+    asset?.kind === 'audio' && asset.thumbPath ? mediaUrl(asset.thumbPath) : undefined
+  return { ...common, type, data: { src, name: asset?.name ?? '', waveform } }
 }

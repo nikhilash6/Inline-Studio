@@ -11,6 +11,7 @@ import {
   addFrameItem,
   addPreview,
   addLayer,
+  addDirector,
   updateItem,
   deleteItem,
   importAndPlace,
@@ -60,6 +61,10 @@ export function registerMoodboardHandlers(): void {
 
   handle<[number, number], MoodboardItem>(IpcChannels.moodboard.addLayer, (x, y) =>
     addLayer(num(x, 'x'), num(y, 'y')),
+  )
+
+  handle<[number, number], MoodboardItem>(IpcChannels.moodboard.addDirector, (x, y) =>
+    addDirector(num(x, 'x'), num(y, 'y')),
   )
 
   handle<[string, MoodboardItemPatch], MoodboardItem>(
